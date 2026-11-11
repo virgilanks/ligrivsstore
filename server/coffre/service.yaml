@@ -1,0 +1,123 @@
+# ==========================================================================
+# Fiche de déploiement — service « coffre » (modèle 1, 10 novembre 2026)
+# Sous-projet KEEPASS : synchronisation des coffres (format KDBX) de notre application.
+# Pièces jointes : compose.yaml, .env.example, config/httpd.conf,
+# config/healthz.txt, scripts/utilisateurs.sh, scripts/historique.sh,
+# LISEZMOI.md ; dossier de conception KEEPASS (Word) en complément.
+#
+# Aucune valeur secrète dans ce fichier : uniquement des noms.
+# a_attribuer : valeur fixée au déploiement par la conversation infra.
+# ==========================================================================
+
+modele: 1
+
+service:
+  nom: coffre
+  libelle: "Coffre — synchronisation des coffres de mots de passe (KDBX)"
+  description: "Serveur WebDAV qui synchronise les coffres de mots de passe de l'application KEEPASS, en cours de développement (fichiers KDBX chiffrés sur les terminaux), pour Hermann et quelques proches ; des applications compatibles KDBX l'utilisent pour la recette. Un compte et un dossier par utilisateur, sans partage. Le serveur ne stocke que des fichiers chiffrés et ne voit jamais un mot de passe de coffre."
+  patron: application-web
+  criticite: haute              # confidentialité : le coffre protège tous les autres accès
+  donnees_personnelles: oui     # décrites dans securite.donnees
+
+exposition:
+  noms:
+    - coffre.ligrivs.com
+  # Public : les applications natives (iOS, Android, PC) ne savent pas franchir
+  # la page de Cloudflare Access ; l'accès est protégé par les comptes WebDAV.
+  public: oui
+  # Aucune interface d'administration web : l'administration passe par le Shell
+  # de pve1 (vm-exec) et scripts/utilisateurs.sh.
+  chemins_access: []
+  exceptions_publiques: []
+  # Coffres de quelques Mo (plafond fixé à 50 Mo par requête), réponses immédiates.
+  respecte_limites_cloudflare: oui
+  # Réglages Cloudflare à prévoir pour ce nom : aucune mise en cache (le serveur
+  # envoie Cache-Control: no-store) ; ni « Bot Fight Mode » ni défi de navigateur,
+  # car les clients WebDAV ne sont pas des navigateurs.
+
+hebergement:
+  emplacement: nouvelle-vm
+  nouvelle_vm:
+    reseau: APP
+    vcpu: 1
+    memoire_go: 2
+    disque_go: 20
+    justification: "Criticité haute : isoler les coffres d'une compromission d'un autre service d'apps01 (WordPress de ligrivs). Charge très faible. Docker et Compose comme sur apps01 ; dossier /opt/sites/coffre ; nom de VM proposé : coffre01."
+  port: a_attribuer             # 8080 à 8099, depuis edge01 seulement
+
+conteneurs:
+  - service_compose: webdav
+    image: "httpd:2.4.69-trixie"
+    role: "serveur WebDAV (Apache) : /dav/<utilisateur>/ en lecture-écriture pour son seul propriétaire, /versions/<utilisateur>/ en lecture seule, /healthz public"
+    port_interne: 8080
+    volumes:
+      - chemin: /srv/keepass/dav
+        contenu: "coffres KDBX chiffrés, un dossier par utilisateur (data/dav)"
+        taille_estimee_go: 1
+      - chemin: /srv/keepass/versions
+        contenu: "historique des coffres, monté en lecture seule (data/versions)"
+        taille_estimee_go: 4
+      - chemin: /var/lib/davlock
+        contenu: "base des verrous WebDAV (data/davlock)"
+        taille_estimee_go: 0.01
+  - service_compose: versions
+    image: "busybox:1.37.0"
+    role: "historique : copie horodatée de chaque coffre modifié, passage toutes les 15 minutes, conservation 30 jours ; aucun réseau"
+    port_interne: aucun         # network_mode: none
+    volumes:
+      - chemin: /dav
+        contenu: "mêmes données que /srv/keepass/dav, en lecture seule"
+        taille_estimee_go: 0
+      - chemin: /versions
+        contenu: "mêmes données que /srv/keepass/versions (écriture)"
+        taille_estimee_go: 0
+
+base_de_donnees:
+  type: aucune                  # fichiers KDBX ; pas de base
+  nom: aucune
+  taille_estimee_go: 0
+
+# Aucune sortie au-delà du DNS, de HTTP/HTTPS et de l'heure ; le conteneur
+# « versions » n'a même pas de réseau.
+flux_sortants: []
+envoi_emails: non
+
+secrets:                        # NOMS uniquement, jamais les valeurs
+  - nom: WEBDAV_COMPTES
+    origine: generee
+    usage: "fichier auth/htpasswd : empreintes bcrypt des mots de passe WebDAV, un par utilisateur. Chaque mot de passe (32 caractères aléatoires) est généré sur coffre01 par scripts/utilisateurs.sh, affiché une seule fois pour être saisi dans les applications de l'utilisateur, puis oublié du serveur."
+# Hors serveur, jamais transmis : le mot de passe maître et le fichier clé de
+# chaque coffre restent sur les terminaux de leur propriétaire.
+
+securite:
+  authentification: "Comptes WebDAV locaux (authentification Basic sur HTTPS ; mot de passe aléatoire de 32 caractères par utilisateur ; empreinte bcrypt). Cloisonnement : un bloc <Directory> par utilisateur ; racine et dossiers inconnus refusés ; MOVE et COPY vers un autre dossier refusés (testé). Pas de double authentification côté serveur, car WebDAV ne la permet pas : le second facteur est dans le chiffrement de chaque coffre (KDBX 4, Argon2id, phrase de passe et fichier clé ou YubiKey). Un serveur ou une bordure compromis ne peut ni lire ni modifier un coffre sans que ce soit détecté."
+  donnees: "Données personnelles : noms des comptes WebDAV, adresses IP et noms de compte dans les journaux (rotation 3 × 10 Mo), dates de modification des fichiers. Le contenu des coffres (identifiants, mots de passe, notes, URL) est chiffré sur les terminaux et illisible sur le serveur. Durée : tant que le compte existe, plus 30 jours d'historique ; sauvegardes de la VM 7 jours et 4 semaines. Accès : Hermann (administration de la VM) ; chaque utilisateur à son seul dossier."
+  points_sensibles_waf:
+    - /dav/                     # méthodes WebDAV (PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK), corps XML, PUT de fichiers binaires chiffrés jusqu'à 50 Mo
+    - /versions/                # PROPFIND et GET de fichiers binaires
+  conteneur_privilegie: non     # utilisateur 33:33, cap_drop ALL, no-new-privileges, système de fichiers en lecture seule
+
+exploitation:
+  sante:
+    url: /healthz
+    attendu: "200, avec le texte « ok »"
+  sauvegarde: "VM entière chaque nuit (par défaut). En plus, dans la VM : historique de chaque coffre (copie à chaque modification, passage toutes les 15 minutes, conservation 30 jours, la dernière copie toujours gardée). Chaque terminal garde aussi sa copie locale du coffre."
+  rpo_heures: 24                # perte maximale si la VM est perdue ; 15 minutes en cas de coffre écrasé ou corrompu (historique)
+  rto_heures: 24                # les applications fonctionnent hors ligne : seule la synchronisation est suspendue
+  mises_a_jour: "Versions épinglées. Veille mensuelle des avis de sécurité d'Apache httpd et de BusyBox. Passer à httpd 2.4.70 dès la publication de son image officielle (dépôt docker-library déjà à jour, catalogue officiel encore en 2.4.69 au 9 novembre 2026). Revue trimestrielle."
+  journaux: "Sortie standard des conteneurs (json-file, rotation). Adresse réelle du client lue dans X-Forwarded-For d'edge01 uniquement. Aucun mot de passe journalisé (vérifié en test)."
+
+recette:                        # chaque test se vérifie par une commande (comptes de test « recette1 » et « recette2 » créés puis supprimés)
+  - "curl -s https://coffre.ligrivs.com/healthz renvoie « ok » avec le code 200"
+  - "curl -s -o /dev/null -w '%{http_code}' -X PROPFIND -H 'Depth: 1' https://coffre.ligrivs.com/dav/recette1/ renvoie 401 (sans compte)"
+  - "la même requête avec -u recette1:… renvoie 207 ; sur https://coffre.ligrivs.com/dav/ (liste des utilisateurs), elle renvoie 403"
+  - "curl -u recette1:… -T essai.kdbx https://coffre.ligrivs.com/dav/recette1/essai.kdbx renvoie 201 ; un GET rend un fichier identique (cmp) ; DELETE renvoie 204"
+  - "avec -u recette2:…, un GET de /dav/recette1/essai.kdbx renvoie 401, et un MOVE de recette1 vers /dav/recette2/ renvoie 401 sans déplacer le fichier"
+  - "après une modification de essai.kdbx, PROPFIND sur /versions/recette1/ liste une nouvelle copie en moins de 16 minutes ; un PUT dans /versions/ renvoie 403"
+  - "un envoi de 60 Mo renvoie 413"
+  - "un PUT avec If-Match portant un ETag périmé (après une autre écriture) renvoie 412 et ne modifie pas le fichier"
+  - "curl -sI https://coffre.ligrivs.com/healthz contient « cache-control: no-store »"
+  - "docker inspect coffre-webdav coffre-versions : User 33:33, ReadonlyRootfs true, CapDrop ALL, Privileged false"
+  - "docker compose logs webdav montre l'adresse publique du client (pas celle d'edge01) et aucun mot de passe"
+
+retour_arriere: "docker compose down (données gardées) ; route du tunnel et bloc Caddy retirés ; VM coffre01 arrêtée ; données, historique et sauvegardes gardés 30 jours. Les applications gardent leur copie locale des coffres : aucune perte côté utilisateurs."

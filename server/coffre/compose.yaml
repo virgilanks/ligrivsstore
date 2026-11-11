@@ -1,0 +1,66 @@
+# =============================================================================
+# coffre — synchronisation WebDAV des coffres (format KDBX) de l'application KEEPASS
+# VM coffre01 (réseau APP), dossier /opt/sites/coffre
+# Paramètres dans .env (droits 600, aucun secret) ; comptes WebDAV dans
+# auth/htpasswd (empreintes bcrypt, générées sur le serveur).
+# =============================================================================
+name: coffre
+
+services:
+  webdav:
+    image: httpd:2.4.69-trixie          # image officielle, version exacte
+    container_name: coffre-webdav
+    restart: unless-stopped
+    user: "33:33"                       # www-data : jamais root
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:?PUBLIC_HOSTNAME manquant}
+      EDGE01_IP: ${EDGE01_IP:?EDGE01_IP manquant}
+    ports:
+      - "${PORT_HTTP:?PORT_HTTP manquant}:8080"   # joignable depuis edge01 seulement (pare-feu)
+    volumes:
+      - ./config/httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
+      - ./config/healthz.txt:/usr/local/apache2/htdocs/healthz.txt:ro
+      - ./auth/htpasswd:/usr/local/apache2/conf/auth/htpasswd:ro
+      - ./auth/utilisateurs:/usr/local/apache2/conf/utilisateurs:ro
+      - ./data/dav:/srv/keepass/dav
+      - ./data/versions:/srv/keepass/versions:ro
+      - ./data/davlock:/var/lib/davlock
+    tmpfs:
+      - /tmp:size=16m
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '^ok' <&3"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 256m
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  versions:
+    image: busybox:1.37.0               # image officielle, version exacte
+    container_name: coffre-versions
+    restart: unless-stopped
+    user: "33:33"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none                  # aucun accès réseau
+    environment:
+      SNAPSHOT_INTERVAL: ${SNAPSHOT_INTERVAL:-900}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+    volumes:
+      - ./scripts/historique.sh:/historique.sh:ro
+      - ./data/dav:/dav:ro
+      - ./data/versions:/versions
+    command: ["sh", "/historique.sh"]
+    mem_limit: 64m
+    pids_limit: 50
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }

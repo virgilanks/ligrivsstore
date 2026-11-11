@@ -1,0 +1,33 @@
+[package]
+name = "ligrivsstore-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+ligrivsstore-core = { path = "../crates/core" }
+# Même version que le noyau : la cible « ouvrir_coffre » appelle la
+# bibliothèque sans le garde-fou du noyau, pour y détecter les arrêts brutaux.
+keepass = { version = "=0.17.0", default-features = false, features = ["save_kdbx4", "_merge"] }
+
+[[bin]]
+name = "lire_entete"
+path = "fuzz_targets/lire_entete.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ouvrir_coffre"
+path = "fuzz_targets/ouvrir_coffre.rs"
+test = false
+doc = false
+bench = false
+
+# Espace de travail indépendant (chaîne nightly, cargo-fuzz).
+[workspace]
+members = ["."]
