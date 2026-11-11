@@ -84,7 +84,7 @@ Livrable vérifiable : **deux postes synchronisés par le serveur « coffre »**
 | Noyau : liste de l'EFF (empreinte SHA-256), phrases de passe, entrées réservées à travers enregistrement et fusion, restauration sans perte, sauvegarde d'un autre coffre refusée ; envoi du fichier enregistré sans réécriture ni sauvegarde en double, y compris après réouverture ; réécriture avant l'envoi d'une modification non enregistrée ou d'un fichier modifié par un autre programme | Réussi |
 | Sous Windows, dans l'intégration continue : fenêtre cachée qui reçoit verrouillage de session et mise en veille ; presse-papiers protégé (trois formats lus et vérifiés, effacement, copie d'un autre programme respectée) ; clippy sur le code propre à Windows | Réussi |
 | `svelte-check`, `cargo fmt`, `cargo clippy -D warnings` (dépôt et coquille), `cargo deny` (dépôt, application Windows), `npm audit` des paquets livrés | Aucune remarque ; conformes |
-| Intégration continue sur GitHub (Rust 1.99.1), demande n° 5 | Verte : 141 tests sous Linux, 144 sous Windows (KeePassXC 2.8.0) ; essai `deux_postes` contre le banc derrière le relais HTTPS ; installateur produit (archive de 3,4 Mo) |
+| Intégration continue sur GitHub (Rust 1.99.1), demande n° 5, après la correction (commit 58c5a23) | Verte : 145 tests sous Linux, 148 sous Windows (KeePassXC 2.8.0) ; essai `deux_postes`, restauration comprise, contre le banc derrière le relais HTTPS ; installateur produit (archive de 3,4 Mo) |
 
 ### 2. Essai de l'application compilée : deux postes
 
@@ -111,7 +111,7 @@ Avec le compte de recette `recette-j0` du serveur en service, et un coffre d'ess
 
 | N° | Étape | Attendu |
 |---|---|---|
-| S2-1 | Installer l'installateur de la demande de fusion n° 5, par-dessus la version de la semaine 1. Le prendre dans l'onglet « Checks », comme en S1-1 : cet onglet montre l'exécution la plus récente, la seule qui contienne la correction de S2-7 | Le coffre de la semaine 1 s'ouvre toujours |
+| S2-1 | Installer l'installateur de la demande de fusion n° 5, par-dessus la version de la semaine 1. Le prendre dans l'onglet « Checks », comme en S1-1 : cet onglet montre l'exécution la plus récente. Les exécutions antérieures au commit 58c5a23 n'ont pas la correction de S2-7 | Le coffre de la semaine 1 s'ouvre toujours |
 | S2-2 | Onglet « Synchronisation » : adresse `https://coffre.ligrivs.com`, compte `recette-j0`, nom `recette-j1.kdbx`, mot de passe du serveur, puis « Enregistrer » | Pastille « À jour » en quelques secondes |
 | S2-3 | Second poste, au choix : un autre PC Windows, avec l'application et « Installer le coffre du serveur… » (fichier clé : « Choisir… », la copie faite en S1-9) ; ou l'outil `lgs` dans WSL (commandes ci-dessous) | Les entrées du premier poste y apparaissent. `lgs` liste en plus « Serveur de synchronisation (ligrivsstore) » : c'est l'entrée réservée qui porte les identifiants du serveur, que l'application cache |
 | S2-4 | Ajouter une entrée sur le second poste et la synchroniser ; dans l'application, « Synchroniser maintenant ». Modifier ensuite une entrée dans l'application, attendre 10 s, synchroniser le second poste | Chaque modification apparaît de l'autre côté ; l'historique garde la version précédente |
