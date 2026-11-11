@@ -15,6 +15,8 @@ Ne décrivez jamais une vulnérabilité dans un ticket ou une demande de fusion.
 |---|---|
 | Vol du fichier du coffre (terminal, serveur, sauvegarde) | Chiffrement KDBX 4.1 ; Argon2id 32 à 64 Mio ; phrase de passe et fichier clé |
 | Serveur, Cloudflare ou relais compromis | Le serveur ne voit que des fichiers chiffrés et authentifiés ; une altération est détectée ; un fichier hostile est refusé avant tout calcul coûteux (décision 0006) |
+| Terminaison du HTTPS chez Cloudflare | Cloudflare voit le mot de passe WebDAV (authentification Basic) et les fichiers. Ceux-ci restent chiffrés par KDBX. Le mot de passe WebDAV ne donne accès qu'à ces fichiers ; il est distinct de la phrase de passe du coffre et renouvelable en une commande. Risque accepté (décision 0008) |
+| Blocage d'un foyer par CrowdSec (mot de passe changé, application qui réessaie) | Suspension de la synchronisation dès le premier refus, jusqu'à une nouvelle saisie (décision 0008) |
 | Écrasement par un autre terminal | Envoi conditionnel (If-Match) et fusion (décision 0003) |
 | Coupure pendant un enregistrement | Écriture atomique, relecture de contrôle, dix sauvegardes locales |
 | Interception réseau | HTTPS obligatoire ; aucun identifiant dans les adresses ; aucune redirection suivie |

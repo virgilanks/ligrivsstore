@@ -21,3 +21,4 @@ Le serveur « coffre » (Apache, WebDAV, un dossier par utilisateur, historique 
 - Vérifié sur le banc Apache avec la configuration livrée : création conditionnelle (412 au second créateur), conflit réel (412) puis reprise, attente des étiquettes faibles, cloisonnement entre comptes, lecture du résultat par KeePassXC.
 - Coût : jusqu'à deux dérivations de clé par envoi (sérialisation, relecture de contrôle) et une après chaque envoi d'un autre terminal (ouverture du coffre distant).
 - Pour la version vendue dans les stores, d'autres transports (iCloud Drive, Google Drive) pourront implémenter le même trait `Transport`.
+- Complétée par la décision 0008 (revue infra du 11 novembre 2026) : emplacement à la racine du dossier du compte, noms de fichiers temporaires refusés, 50 Mo au plus, suspension après un refus d'identifiants (CrowdSec), banc derrière un relais HTTPS.

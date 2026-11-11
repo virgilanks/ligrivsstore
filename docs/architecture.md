@@ -49,7 +49,22 @@ Sous Unix, ces fichiers ne sont lisibles que par leur propriétaire (droits 600,
 │      If-Match : étiquette   (ou If-None-Match : * s'il n'existe pas)
 │      2xx : fin (l'étiquette renvoyée, faible, n'est pas conservée)
 └── 412 : un autre terminal a écrit entre-temps → recommencer (5 tentatives au plus)
+
+401 à n'importe quelle étape : synchronisation suspendue (état enregistré)
+jusqu'à LocalVault::accept_new_credentials — CrowdSec bannit l'adresse
+4 heures après cinq échecs en rafale.
 ```
+
+## Règles du serveur « coffre » (revue infra du 11 novembre 2026)
+
+Le noyau les applique avant toute requête (décision 0008) :
+
+| Règle du serveur | Application par le noyau |
+|---|---|
+| Coffres à la racine de `/dav/<compte>/`, pas de sous-dossier (historique, MKCOL refusé) | Adresse `/dav/<compte>/<coffre>.kdbx` exigée, `<compte>` égal au compte WebDAV |
+| Fichiers temporaires (`.tmp`, `~`, `.lock`, nom commençant par un point) non historisés | Noms refusés ; extension `.kdbx` exigée |
+| 50 Mo au plus par fichier | Envoi refusé localement au-delà (`MAX_UPLOAD_BYTES`) |
+| CrowdSec : cinq échecs avec identifiants en rafale, bannissement de 4 heures | Identifiants à chaque requête ; suspension après un refus |
 
 Garanties vérifiées par les tests :
 
@@ -65,7 +80,9 @@ Garanties vérifiées par les tests :
 | Format | KDBX 4.1, AES-256 (ou ChaCha20 / Twofish conservés), chiffrement interne ChaCha20 |
 | Dérivation | Argon2id 1.3, 2 voies, 32 Mio à la création ; 32 à 64 Mio à l'enregistrement (limite de l'AutoFill d'iOS) ; itérations calibrées, jamais moins de 4 ; les réglages par défaut de la bibliothèque (Argon2d, 1 Mio) ne sont jamais écrits |
 | Fichiers hostiles | En-tête relu de façon stricte avant tout calcul (plafonds : 1 Gio, 1 000 itérations, 16 voies, 100 millions de tours AES, 64 Mio de fichier) ; toute panique de la bibliothèque est convertie en erreur |
-| Réseau | `https://` obligatoire (`http://` admis vers la machine locale seulement, pour les tests) ; aucun identifiant dans l'adresse ; aucune redirection suivie ; téléchargement plafonné à 64 Mio ; délais d'attente |
+| Réseau | `https://` obligatoire (`http://` admis vers la machine locale seulement, pour les tests) ; autorités publiques seulement, sauf autorité explicite (banc, serveur privé) ; aucun identifiant dans l'adresse ; aucune redirection suivie ; téléchargement plafonné à 64 Mio, envoi à 50 Mo ; délais d'attente |
+| Bordure | Cloudflare termine le chiffrement HTTPS : il voit le mot de passe WebDAV et les fichiers, chiffrés et authentifiés par KDBX. Le mot de passe WebDAV est distinct de la phrase de passe du coffre et renouvelable |
+| Refus d'identifiants | Synchronisation suspendue après un 401, jusqu'à une nouvelle saisie (CrowdSec) |
 | Mémoire | Clé du coffre, mots de passe saisis et générés, identifiants WebDAV : effacés à la destruction (`zeroize`) ; affichage masqué dans les journaux de débogage |
 | Fichiers locaux | Écriture atomique et relecture avant tout envoi ; dix sauvegardes ; droits restreints |
 | Chaîne logicielle | Dépendances épinglées (`Cargo.lock`) ; licences et vulnérabilités connues contrôlées par `cargo-deny` ; actions GitHub épinglées par empreinte ; mises à jour proposées chaque semaine |

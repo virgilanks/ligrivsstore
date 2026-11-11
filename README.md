@@ -19,8 +19,8 @@ Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec
 | `crates/core` | Noyau `ligrivsstore-core` : coffre, contrôle d'en-tête, dérivation, stockage, fusion, synchronisation, générateur |
 | `crates/cli` | Outil `lgs`, pour le développement, la recette et le diagnostic (ce n'est pas l'application) |
 | `fuzz` | Cibles de tests aléatoires guidés (cargo-fuzz), lancées chaque semaine |
-| `scripts` | Banc WebDAV local et scénario de recette de bout en bout |
-| `server/coffre` | Copie de référence du service « coffre » (fiche de déploiement et configuration) |
+| `scripts` | Banc WebDAV local (Apache derrière un relais HTTPS), tests du serveur et scénario de recette de bout en bout |
+| `server/coffre` | Fichiers du service « coffre » revus par la conversation « infra » (11 novembre 2026) : fiche de déploiement et configuration |
 | `docs` | Architecture, décisions, plan de recette |
 | `.github` | Intégration continue (format, analyse, tests, interopérabilité, licences, vulnérabilités) |
 
@@ -36,8 +36,9 @@ cargo test --workspace            # tests unitaires, de fusion, de synchronisati
 Les tests d'interopérabilité (KeePassXC) et de synchronisation réelle (Apache) s'exécutent quand leurs outils sont présents. Sous Linux, le dossier [docs/recette-j0.md](docs/recette-j0.md) en donne la marche complète :
 
 ```bash
-sudo apt-get install keepassxc apache2 apache2-utils
-sudo scripts/banc-webdav.sh demarrer
+sudo apt-get install keepassxc apache2 apache2-utils openssl busybox
+sudo scripts/banc-webdav.sh demarrer        # Apache « coffre » derrière un relais HTTPS
+sudo scripts/tests-serveur.sh               # 63 tests du serveur, par le relais
 set -a; . /tmp/lgs-banc-webdav/env; set +a
 cargo test --workspace
 scripts/scenario-synchro.sh
@@ -55,6 +56,7 @@ lgs add coffre.kdbx --title Banque --url https://banque.exemple --username herma
 lgs list coffre.kdbx
 lgs show coffre.kdbx Banque --reveal
 lgs sync coffre.kdbx --url https://coffre.ligrivs.com/dav/hermann/coffre.kdbx --user hermann
+lgs sync coffre.kdbx --url … --user hermann --new-credentials   # après un refus d'identifiants
 lgs info coffre.kdbx                         # format et dérivation, sans clé
 lgs backups coffre.kdbx                      # sauvegardes locales
 ```
