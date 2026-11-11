@@ -4,7 +4,7 @@ Le jalon 0 livre le noyau, l'outil `lgs`, les tests et l'intégration continue. 
 
 ## 1. Tests automatiques
 
-Résultats du 11 novembre 2026, sur un banc Linux : Rust 1.97.0, KeePassXC 2.7.6, et Apache 2.4.58 avec la configuration revue du serveur « coffre », derrière un relais HTTPS. Après l'intégration de la revue infra, la suite complète a été lancée deux fois de suite, sans échec. Le premier passage de l'intégration continue sur GitHub (Rust 1.99.1, Linux et Windows), avant la revue, était vert.
+Résultats du 11 novembre 2026, sur un banc Linux : Rust 1.97.0, KeePassXC 2.7.6, et Apache 2.4.58 avec la configuration revue du serveur « coffre », derrière un relais HTTPS. Après l'intégration de la revue infra, la suite complète a été lancée deux fois de suite, sans échec. L'intégration continue sur GitHub (Rust 1.99.1) est verte avant et après la revue. Après la revue : 81 tests réussis sous Linux, 80 sous Windows (un test des droits de fichiers est propre à Unix), 63 tests du serveur et le scénario (25 sur 25) sur le banc.
 
 | Suite | Ce qui est vérifié | Tests | Résultat |
 |---|---|---|---|
@@ -25,7 +25,7 @@ Contrôles complémentaires :
 | Scénario de bout en bout `scripts/scenario-synchro.sh` (outil `lgs`, KeePassXC, banc Apache) | 25 vérifications réussies sur 25, dont COPY, MOVE et MKCOL par HTTPS et la suspension après un refus d'identifiants |
 | `cargo fmt --check`, `cargo clippy -D warnings` | Aucune remarque |
 | `cargo deny check` : vulnérabilités connues, licences, origines, doublons | Conforme |
-| Fichiers de l'intégration continue : syntaxe, actions épinglées par empreinte | Conformes ; premier passage sur GitHub vert |
+| Fichiers de l'intégration continue : syntaxe, actions épinglées par empreinte | Conformes ; passages sur GitHub verts, avant et après la revue |
 
 ## 2. Mesures
 
@@ -46,6 +46,6 @@ Contrôles complémentaires :
 | R3 | Copier ce coffre et le fichier clé sur le téléphone Android, l'ouvrir avec KeePassDX, ajouter une entrée, recopier le fichier, puis `lgs merge` | L'entrée ajoutée sur Android est fusionnée |
 | R4 | Facultatif, si un iPhone est disponible : même essai avec KeePassium | Coffre lisible |
 | R5 | Une fois le serveur « coffre » déployé et un compte de recette créé : lancer `scripts/scenario-synchro.sh` (Linux ou WSL), avec `LGS_TEST_WEBDAV_URL=https://coffre.ligrivs.com/dav/<compte>/`. Saisir le mot de passe au clavier : `read -rs LGS_TEST_WEBDAV_PASSWORD; export LGS_TEST_WEBDAV_PASSWORD`. Contre le serveur déployé, le scénario ne provoque aucun refus d'identifiants : CrowdSec bannit l'adresse 4 heures après cinq échecs en rafale. Éviter aussi de relancer le scénario après une erreur de saisie du mot de passe | 22 vérifications réussies (20 sans keepassxc-cli), dont COPY et MOVE par HTTPS |
-| R6 | Après le premier envoi sur GitHub : consulter l'onglet *Actions* | Les trois volets de l'intégration continue sont verts |
+| R6 | Sur GitHub, dans la demande de fusion n° 1 : consulter l'onglet *Checks* | Les quatre travaux de l'intégration continue sont verts : vérifications (Linux), Windows, interopérabilité, dépendances |
 
 Critère de sortie du jalon 0 : R1, R2, R3, R5 et R6 réussis.

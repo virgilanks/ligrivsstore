@@ -1,4 +1,4 @@
-# Intégration continue : chaque demande de fusion doit passer ces trois volets.
+# Intégration continue : chaque demande de fusion doit passer ces quatre travaux.
 # Les actions tierces sont épinglées par empreinte de commit (et non par
 # étiquette), pour qu'une étiquette déplacée ne puisse pas changer le code exécuté.
 name: Intégration continue
