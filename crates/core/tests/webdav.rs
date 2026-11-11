@@ -3,12 +3,15 @@
 //!
 //! Variables d'environnement (posées par `scripts/banc-webdav.sh`) :
 //! - `LGS_TEST_WEBDAV_URL` : dossier de l'utilisateur de test, par exemple
-//!   `http://127.0.0.1:18081/dav/recette1/` ;
+//!   `https://127.0.0.1:18443/dav/recette1/` (relais HTTPS du banc) ;
+//! - `LGS_TEST_WEBDAV_CA` : autorité de certification du banc (facultative :
+//!   absente pour le serveur déployé, dont le certificat est public) ;
 //! - `LGS_TEST_WEBDAV_USER`, `LGS_TEST_WEBDAV_PASSWORD` : son compte ;
-//! - `LGS_TEST_WEBDAV_USER2`, `LGS_TEST_WEBDAV_PASSWORD2` : un second compte
-//!   (cloisonnement).
+//! - `LGS_TEST_WEBDAV_USER2`, `LGS_TEST_WEBDAV_PASSWORD2` : un second compte.
 //!
 //! Sans ces variables, les tests sont ignorés, sauf si `LGS_REQUIRE_WEBDAV=1`.
+//! Contre le serveur déployé, aucun test ne provoque volontairement de refus
+//! d'identifiants : CrowdSec bannirait l'adresse.
 #![allow(
     missing_docs,
     clippy::unwrap_used,
@@ -31,6 +34,7 @@ struct Bench {
     user: String,
     password: String,
     user2: Option<(String, String)>,
+    ca: Option<Vec<u8>>,
 }
 
 fn bench() -> Option<Bench> {
@@ -49,6 +53,7 @@ fn bench() -> Option<Bench> {
             user,
             password,
             user2: get("LGS_TEST_WEBDAV_USER2").zip(get("LGS_TEST_WEBDAV_PASSWORD2")),
+            ca: get("LGS_TEST_WEBDAV_CA").map(|path| std::fs::read(path).unwrap()),
         }),
         _ => {
             assert!(
@@ -70,7 +75,26 @@ impl Bench {
     }
 
     fn transport(&self, url: &str) -> WebDavTransport {
-        WebDavTransport::new(url, &self.user, &self.password).unwrap()
+        self.connect(url, &self.user, &self.password).unwrap()
+    }
+
+    fn connect(&self, url: &str, user: &str, password: &str) -> Result<WebDavTransport, SyncError> {
+        match &self.ca {
+            Some(ca) => WebDavTransport::with_root_ca(url, user, password, ca),
+            None => WebDavTransport::new(url, user, password),
+        }
+    }
+
+    /// Banc local (machine locale) : seuls ces tests peuvent provoquer des refus
+    /// d'identifiants.
+    fn is_local(&self) -> bool {
+        url::Url::parse(&self.folder)
+            .ok()
+            .and_then(|u| {
+                u.host_str()
+                    .map(|h| h == "127.0.0.1" || h == "localhost" || h == "[::1]")
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -239,20 +263,53 @@ fn credentials_and_isolation_are_enforced() {
         .store(b"contenu", &Precondition::IfNoneMatchAny)
         .unwrap();
 
-    let wrong = WebDavTransport::new(&url, &bench.user, "mauvais mot de passe").unwrap();
-    assert!(matches!(wrong.fetch(None), Err(SyncError::Unauthorized)));
-
+    // Le dossier d'un autre compte est refusé par le noyau lui-même, avant toute
+    // requête : aucun refus (401) n'est compté par CrowdSec. Le cloisonnement
+    // côté serveur est vérifié par scripts/tests-serveur.sh.
     if let Some((user2, password2)) = &bench.user2 {
-        let other = WebDavTransport::new(&url, user2, password2).unwrap();
         assert!(matches!(
-            other.fetch(None),
-            Err(SyncError::Unauthorized | SyncError::Forbidden)
-        ));
-        assert!(matches!(
-            other.store(b"intrusion", &Precondition::IfNoneMatchAny),
-            Err(SyncError::Unauthorized | SyncError::Forbidden)
+            bench.connect(&url, user2, password2),
+            Err(SyncError::InvalidUrl(_))
         ));
     }
+
+    if bench.is_local() {
+        let wrong = bench
+            .connect(&url, &bench.user, "mauvais mot de passe")
+            .unwrap();
+        assert!(matches!(wrong.fetch(None), Err(SyncError::Unauthorized)));
+    } else {
+        eprintln!("serveur déployé : test du mauvais mot de passe sauté (CrowdSec)");
+    }
+}
+
+#[test]
+fn a_rejected_password_suspends_the_device_until_new_credentials() {
+    let Some(bench) = bench() else { return };
+    if !bench.is_local() {
+        eprintln!("serveur déployé : test sauté (CrowdSec)");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let url = bench.url("suspension");
+    let good = bench.transport(&url);
+    let wrong = bench
+        .connect(&url, &bench.user, "mauvais mot de passe")
+        .unwrap();
+    let mut a = LocalVault::create(dir.path().join("a.kdbx"), "Coffre", key(), fast_kdf()).unwrap();
+    assert!(matches!(
+        a.sync(&wrong, &SyncOptions::default()),
+        Err(ligrivsstore_core::Error::Sync(SyncError::Unauthorized))
+    ));
+    // Même avec les bons identifiants, plus rien ne part avant une nouvelle saisie.
+    assert!(matches!(
+        a.sync(&good, &SyncOptions::default()),
+        Err(ligrivsstore_core::Error::Sync(
+            SyncError::CredentialsSuspended(_)
+        ))
+    ));
+    a.accept_new_credentials().unwrap();
+    assert!(a.sync(&good, &SyncOptions::default()).unwrap().uploaded);
 }
 
 #[test]

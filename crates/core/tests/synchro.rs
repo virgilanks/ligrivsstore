@@ -285,3 +285,43 @@ fn installing_a_device_requires_an_existing_remote_vault() {
         Err(Error::Sync(SyncError::RemoteMissing))
     ));
 }
+
+#[test]
+fn a_credentials_refusal_suspends_synchronisation_until_new_credentials() {
+    // Cinq échecs en rafale font bannir l'adresse 4 heures (CrowdSec) : après un
+    // refus, plus aucune requête tant que l'utilisateur n'a pas ressaisi ses
+    // identifiants, même après un redémarrage de l'application.
+    let dir = tempfile::tempdir().unwrap();
+    let server = MemoryServer::new();
+    let (mut a, _b) = two_devices(dir.path(), &server);
+    a.vault_mut().add_entry(&entry("Impots", "i")).unwrap();
+    a.save().unwrap();
+
+    server.reject_credentials(true);
+    assert!(matches!(
+        a.sync(&server, &options()),
+        Err(Error::Sync(SyncError::Unauthorized))
+    ));
+    let requests = server.fetches();
+    for _ in 0..3 {
+        assert!(matches!(
+            a.sync(&server, &options()),
+            Err(Error::Sync(SyncError::CredentialsSuspended(_)))
+        ));
+    }
+    let mut reopened = LocalVault::open(a.path(), key(), OpenLimits::default()).unwrap();
+    assert!(matches!(
+        reopened.sync(&server, &options()),
+        Err(Error::Sync(SyncError::CredentialsSuspended(_)))
+    ));
+    assert_eq!(
+        server.fetches(),
+        requests,
+        "aucune requête pendant la suspension"
+    );
+
+    server.reject_credentials(false);
+    reopened.accept_new_credentials().unwrap();
+    assert!(reopened.sync(&server, &options()).unwrap().uploaded);
+    assert!(reopened.sync_state().credentials_rejected_utc.is_none());
+}

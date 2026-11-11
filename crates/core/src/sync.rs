@@ -10,6 +10,18 @@
 //! La boucle complète (téléchargement, fusion, enregistrement, envoi) est dans
 //! [`crate::local::LocalVault::sync`]. Le trait [`Transport`] permet de la
 //! tester sans réseau.
+//!
+//! ## Règles du serveur « coffre » (revue infra du 11 novembre 2026)
+//!
+//! - Le coffre est à la racine du dossier du compte : `/dav/<compte>/<coffre>.kdbx`.
+//!   L'historique du serveur ne suit pas les sous-dossiers, que le serveur refuse
+//!   d'ailleurs de créer.
+//! - Un nom de fichier temporaire (`.tmp`, `~`, `.lock`, nom commençant par un
+//!   point) n'est pas historisé : un coffre ne doit jamais en porter un.
+//! - 50 Mo au plus par fichier.
+//! - Chaque requête porte les identifiants (jamais de premier essai anonyme).
+//!   Après un refus (401), la synchronisation automatique est suspendue :
+//!   CrowdSec bannit l'adresse 4 heures après cinq échecs en rafale.
 
 use std::path::Path;
 use std::time::Duration;
@@ -28,6 +40,10 @@ use crate::vault::MergeReport;
 /// Taille maximale d'un coffre téléchargé (le serveur refuse au-delà de 50 Mo).
 pub const MAX_DOWNLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
+/// Taille maximale d'un envoi : 50 Mo, la limite du serveur « coffre »
+/// (`LimitRequestBody 52428800`).
+pub const MAX_UPLOAD_BYTES: u64 = 52_428_800;
+
 /// Erreur de synchronisation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -40,18 +56,32 @@ pub enum SyncError {
         "connexion non chiffrée refusée : utilisez https:// (http:// n'est admis que vers la machine locale, pour les tests)"
     )]
     InsecureUrl,
-    /// Identifiants WebDAV refusés.
-    #[error("identifiants WebDAV refusés par le serveur (401)")]
+    /// Identifiants WebDAV refusés (401).
+    ///
+    /// Ne jamais réessayer automatiquement : après cinq échecs en rafale,
+    /// CrowdSec bannit l'adresse pendant 4 heures. [`crate::LocalVault`]
+    /// suspend la synchronisation jusqu'à une nouvelle saisie.
+    #[error(
+        "identifiants WebDAV refusés par le serveur (401) : synchronisation suspendue jusqu'à une nouvelle saisie"
+    )]
     Unauthorized,
+    /// Synchronisation suspendue après un refus d'identifiants.
+    #[error(
+        "synchronisation suspendue depuis le {0} : identifiants WebDAV refusés ; saisissez-les de nouveau (cinq échecs en rafale font bannir l'adresse pendant 4 heures)"
+    )]
+    CredentialsSuspended(String),
     /// Accès refusé à cet emplacement.
     #[error("accès refusé par le serveur (403)")]
     Forbidden,
     /// Fichier verrouillé par un autre client WebDAV.
     #[error("coffre verrouillé sur le serveur par un autre client (423)")]
     Locked,
-    /// Fichier trop volumineux pour le serveur.
-    #[error("coffre trop volumineux pour le serveur (413)")]
+    /// Fichier trop volumineux pour le serveur (50 Mo au plus).
+    #[error("coffre trop volumineux pour le serveur : 50 Mo au plus")]
     TooLarge,
+    /// Certificat d'autorité illisible.
+    #[error("certificat d'autorité illisible : {0}")]
+    InvalidCertificate(String),
     /// Réponse inattendue.
     #[error("réponse inattendue du serveur : code {0}")]
     UnexpectedStatus(u16),
@@ -192,6 +222,7 @@ pub struct SyncReport {
 
 /// État de synchronisation d'un coffre local, enregistré à côté du coffre.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SyncState {
     /// Étiquette (forte) de la dernière version connue du serveur.
     pub remote_etag: Option<String>,
@@ -201,6 +232,9 @@ pub struct SyncState {
     pub last_uploaded_sha256: Option<String>,
     /// Date de la dernière synchronisation réussie (UTC, ISO 8601).
     pub last_sync_utc: Option<String>,
+    /// Date du dernier refus d'identifiants (UTC, ISO 8601) : tant qu'elle est
+    /// présente, la synchronisation est suspendue.
+    pub credentials_rejected_utc: Option<String>,
 }
 
 impl SyncState {
@@ -253,6 +287,34 @@ impl WebDavTransport {
     /// locale (bancs de test). Les identifiants ne doivent pas figurer dans
     /// l'adresse.
     pub fn new(url: &str, username: &str, password: &str) -> Result<Self, SyncError> {
+        Self::build(url, username, password, None)
+    }
+
+    /// Comme [`WebDavTransport::new`], mais ne fait confiance qu'à l'autorité de
+    /// certification fournie (PEM) : banc d'essai, ou serveur doté d'une autorité
+    /// privée. Sans cette option, seules les autorités publiques sont reconnues.
+    pub fn with_root_ca(
+        url: &str,
+        username: &str,
+        password: &str,
+        ca_pem: &[u8],
+    ) -> Result<Self, SyncError> {
+        let certificate = ureq::tls::Certificate::from_pem(ca_pem)
+            .map_err(|e| SyncError::InvalidCertificate(e.to_string()))?;
+        Self::build(
+            url,
+            username,
+            password,
+            Some(ureq::tls::RootCerts::new_with_certs(&[certificate])),
+        )
+    }
+
+    fn build(
+        url: &str,
+        username: &str,
+        password: &str,
+        roots: Option<ureq::tls::RootCerts>,
+    ) -> Result<Self, SyncError> {
         let parsed = Url::parse(url).map_err(|e| SyncError::InvalidUrl(e.to_string()))?;
         match parsed.scheme() {
             "https" => {}
@@ -273,7 +335,12 @@ impl WebDavTransport {
         if username.is_empty() || username.contains(':') {
             return Err(SyncError::InvalidUrl("identifiant WebDAV invalide".into()));
         }
-        let config = ureq::Agent::config_builder()
+        check_remote_location(&parsed, username)?;
+        let mut builder = ureq::Agent::config_builder();
+        if let Some(roots) = roots {
+            builder = builder.tls_config(ureq::tls::TlsConfig::builder().root_certs(roots).build());
+        }
+        let config = builder
             .http_status_as_error(false)
             .max_redirects(0)
             .timeout_connect(Some(Duration::from_secs(15)))
@@ -323,6 +390,9 @@ impl Transport for WebDavTransport {
     }
 
     fn store(&self, body: &[u8], precondition: &Precondition) -> Result<StoreOutcome, SyncError> {
+        if u64::try_from(body.len()).unwrap_or(u64::MAX) > MAX_UPLOAD_BYTES {
+            return Err(SyncError::TooLarge);
+        }
         let request = self
             .agent
             .put(&self.url)
@@ -339,6 +409,59 @@ impl Transport for WebDavTransport {
             status => Err(status_error(status)),
         }
     }
+}
+
+/// Vérifie le nom du fichier d'un coffre sur le serveur : extension `.kdbx`,
+/// et jamais un nom que le serveur traite comme temporaire (non historisé).
+pub fn validate_file_name(name: &str) -> Result<(), SyncError> {
+    if name.is_empty() {
+        return Err(SyncError::InvalidUrl(
+            "l'adresse doit désigner le fichier du coffre (…/coffre.kdbx)".into(),
+        ));
+    }
+    let lower = name.to_ascii_lowercase();
+    if name.starts_with('.')
+        || lower.ends_with(".tmp")
+        || name.ends_with('~')
+        || lower.ends_with(".lock")
+    {
+        return Err(SyncError::InvalidUrl(format!(
+            "« {name} » est un nom de fichier temporaire, que le serveur n'historise pas"
+        )));
+    }
+    if !lower.ends_with(".kdbx") {
+        return Err(SyncError::InvalidUrl(format!(
+            "« {name} » : le coffre doit porter l'extension .kdbx"
+        )));
+    }
+    Ok(())
+}
+
+/// Vérifie l'emplacement du coffre. Sur le serveur « coffre » (chemins en
+/// `/dav/`), il doit être à la racine du dossier du compte :
+/// `/dav/<compte>/<coffre>.kdbx`. Un dossier étranger produirait des refus
+/// (401), comptés par CrowdSec.
+pub fn check_remote_location(url: &Url, username: &str) -> Result<(), SyncError> {
+    let segments: Vec<&str> = url
+        .path_segments()
+        .map(Iterator::collect)
+        .unwrap_or_default();
+    validate_file_name(segments.last().copied().unwrap_or_default())?;
+    if segments.first() == Some(&"dav") {
+        if segments.len() != 3 {
+            return Err(SyncError::InvalidUrl(
+                "le coffre doit être à la racine du dossier du compte : /dav/<compte>/<coffre>.kdbx"
+                    .into(),
+            ));
+        }
+        if segments.get(1) != Some(&username) {
+            return Err(SyncError::InvalidUrl(format!(
+                "le dossier /dav/{}/ n'est pas celui du compte « {username} »",
+                segments.get(1).copied().unwrap_or_default()
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn status_error(status: u16) -> SyncError {
@@ -436,8 +559,110 @@ mod tests {
             local_dirty: false,
             last_uploaded_sha256: None,
             last_sync_utc: Some("2026-11-11T10:00:00Z".into()),
+            credentials_rejected_utc: None,
         };
         state.save(&path).unwrap();
         assert_eq!(SyncState::load(&path), state);
+    }
+
+    #[test]
+    fn state_written_before_the_suspension_field_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("etat.json");
+        std::fs::write(
+            &path,
+            br#"{"remote_etag":"\"abc\"","local_dirty":false,"last_uploaded_sha256":null,"last_sync_utc":null}"#,
+        )
+        .unwrap();
+        let state = SyncState::load(&path);
+        assert_eq!(state.remote_etag.as_deref(), Some("\"abc\""));
+        assert!(!state.local_dirty);
+        assert!(state.credentials_rejected_utc.is_none());
+    }
+
+    #[test]
+    fn vault_names_must_not_look_temporary() {
+        for name in ["coffre.kdbx", "Coffre familial.KDBX"] {
+            assert!(validate_file_name(name).is_ok(), "{name}");
+        }
+        for name in [
+            "",
+            ".coffre.kdbx",
+            "coffre.kdbx.tmp",
+            "coffre.kdbx~",
+            "coffre.kdbx.lock",
+            "coffre.txt",
+        ] {
+            assert!(
+                matches!(validate_file_name(name), Err(SyncError::InvalidUrl(_))),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn vaults_live_at_the_root_of_their_account_folder() {
+        let url = |u: &str| Url::parse(u).unwrap();
+        assert!(
+            check_remote_location(
+                &url("https://coffre.ligrivs.com/dav/hermann/coffre.kdbx"),
+                "hermann"
+            )
+            .is_ok()
+        );
+        for (address, user) in [
+            (
+                "https://coffre.ligrivs.com/dav/hermann/sous/coffre.kdbx",
+                "hermann",
+            ),
+            ("https://coffre.ligrivs.com/dav/coffre.kdbx", "hermann"),
+            (
+                "https://coffre.ligrivs.com/dav/autre/coffre.kdbx",
+                "hermann",
+            ),
+            (
+                "https://coffre.ligrivs.com/dav/hermann/.coffre.kdbx",
+                "hermann",
+            ),
+        ] {
+            assert!(
+                matches!(
+                    check_remote_location(&url(address), user),
+                    Err(SyncError::InvalidUrl(_))
+                ),
+                "{address}"
+            );
+        }
+        // Autre serveur WebDAV : seules les règles de nom s'appliquent.
+        assert!(
+            check_remote_location(&url("https://nas.exemple/partage/coffres/coffre.kdbx"), "h")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn oversized_uploads_are_refused_before_any_network_access() {
+        // Adresse en .invalid : aucune résolution possible ; le refus doit
+        // venir du contrôle local.
+        let transport =
+            WebDavTransport::new("https://coffre.invalid/dav/h/coffre.kdbx", "h", "x").unwrap();
+        let body = vec![0u8; 52_428_801];
+        assert!(matches!(
+            transport.store(&body, &Precondition::IfNoneMatchAny),
+            Err(SyncError::TooLarge)
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_authority_certificate_is_refused() {
+        assert!(matches!(
+            WebDavTransport::with_root_ca(
+                "https://127.0.0.1:18443/dav/h/coffre.kdbx",
+                "h",
+                "x",
+                b"pas un certificat"
+            ),
+            Err(SyncError::InvalidCertificate(_))
+        ));
     }
 }

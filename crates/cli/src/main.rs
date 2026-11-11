@@ -42,12 +42,17 @@ struct VaultArgs {
 
 #[derive(Args)]
 struct ServerArgs {
-    /// Adresse du fichier sur le serveur (…/dav/<utilisateur>/coffre.kdbx).
+    /// Adresse du coffre sur le serveur, à la racine du dossier du compte
+    /// (https://coffre.ligrivs.com/dav/<compte>/<coffre>.kdbx).
     #[arg(long)]
     url: String,
     /// Compte WebDAV.
     #[arg(long)]
     user: String,
+    /// Autorité de certification (PEM) à reconnaître à la place des autorités
+    /// publiques : banc d'essai ou serveur doté d'une autorité privée.
+    #[arg(long)]
+    ca_file: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -143,6 +148,10 @@ enum Command {
         vault: VaultArgs,
         #[command(flatten)]
         server: ServerArgs,
+        /// Lève la suspension qui suit un refus d'identifiants (après une
+        /// nouvelle saisie du mot de passe WebDAV).
+        #[arg(long)]
+        new_credentials: bool,
     },
     /// Installe sur ce poste le coffre présent sur le serveur.
     Clone {
@@ -327,9 +336,16 @@ fn run(command: Command) -> Result<(), Error> {
                 println!("avertissement : {warning}");
             }
         }
-        Command::Sync { vault, server } => {
+        Command::Sync {
+            vault,
+            server,
+            new_credentials,
+        } => {
             let mut local = open(&vault)?;
             let transport = transport(&server)?;
+            if new_credentials {
+                local.accept_new_credentials()?;
+            }
             let started = Instant::now();
             let report = local.sync(&transport, &SyncOptions::default())?;
             println!(
@@ -450,7 +466,18 @@ fn transport(server: &ServerArgs) -> Result<WebDavTransport, Error> {
     let password = Zeroizing::new(std::env::var("LGS_WEBDAV_PASSWORD").map_err(|_| {
         Error::InvalidInput("mot de passe WebDAV absent : définir LGS_WEBDAV_PASSWORD".into())
     })?);
-    Ok(WebDavTransport::new(&server.url, &server.user, &password)?)
+    match &server.ca_file {
+        Some(path) => {
+            let pem = std::fs::read(path)?;
+            Ok(WebDavTransport::with_root_ca(
+                &server.url,
+                &server.user,
+                &password,
+                &pem,
+            )?)
+        }
+        None => Ok(WebDavTransport::new(&server.url, &server.user, &password)?),
+    }
 }
 
 fn entry_password_from_env() -> Result<Zeroizing<String>, Error> {

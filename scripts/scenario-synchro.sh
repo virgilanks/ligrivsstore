@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Scénario de recette de bout en bout, avec l'outil lgs et KeePassXC :
-# deux terminaux, modifications concurrentes, fusion, lecture par KeePassXC.
+# deux terminaux, modifications concurrentes, fusion, lecture par KeePassXC,
+# opérations WebDAV par HTTPS (COPY, MOVE, MKCOL) et refus attendus.
 #
 #   cargo build -p ligrivsstore-cli
 #   sudo scripts/banc-webdav.sh demarrer
@@ -10,7 +11,9 @@
 #
 # Contre le serveur déployé : définir LGS_TEST_WEBDAV_URL (dossier de
 # l'utilisateur, https://…/dav/<compte>/), LGS_TEST_WEBDAV_USER et
-# LGS_TEST_WEBDAV_PASSWORD (saisi au clavier, jamais écrit dans un fichier).
+# LGS_TEST_WEBDAV_PASSWORD (saisi au clavier, jamais écrit dans un fichier) ;
+# ne pas définir LGS_TEST_WEBDAV_CA. Les refus d'identifiants volontaires ne
+# sont alors pas joués : CrowdSec bannit l'adresse après cinq échecs en rafale.
 # =============================================================================
 set -uo pipefail
 
@@ -30,6 +33,15 @@ export LGS_WEBDAV_PASSWORD="$LGS_TEST_WEBDAV_PASSWORD"
 DOSSIER="${LGS_TEST_WEBDAV_URL%/}"
 URL="$DOSSIER/recette-$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n').kdbx"
 SERVEUR=(--url "$URL" --user "$LGS_TEST_WEBDAV_USER")
+CURL=(curl -s -u "$LGS_TEST_WEBDAV_USER:$LGS_WEBDAV_PASSWORD")
+if [ -n "${LGS_TEST_WEBDAV_CA:-}" ]; then
+    SERVEUR+=(--ca-file "$LGS_TEST_WEBDAV_CA")
+    CURL+=(--cacert "$LGS_TEST_WEBDAV_CA")
+fi
+case "$DOSSIER" in
+    http://127.0.0.1[:/]* | https://127.0.0.1[:/]* | http://localhost[:/]* | https://localhost[:/]*) BANC_LOCAL=1 ;;
+    *) BANC_LOCAL=0 ;;
+esac
 head -c 64 /dev/urandom > cle.keyx
 
 reussis=0; echecs=0
@@ -70,7 +82,7 @@ for terminal in a b; do
 done
 
 echo "== 5. Coffre du serveur"
-curl -sf -u "$LGS_TEST_WEBDAV_USER:$LGS_WEBDAV_PASSWORD" -o distant.kdbx "$URL"
+"${CURL[@]}" -f -o distant.kdbx "$URL"
 info=$("$LGS" info distant.kdbx 2>&1)
 verifier "format KDBX 4.1" "KDBX 4.1" "$info"
 verifier "dérivation Argon2id 32 Mio" "Argon2id, 32 Mio" "$info"
@@ -83,14 +95,35 @@ else
     echo "(keepassxc-cli absent : vérifications KeePassXC sautées)"
 fi
 
-echo "== 6. Refus attendus"
-verifier "mauvais mot de passe WebDAV : refus" "401" \
-    "$(LGS_WEBDAV_PASSWORD=mauvais "$LGS" sync a.kdbx -k cle.keyx "${SERVEUR[@]}" 2>&1)"
+echo "== 6. Opérations WebDAV par HTTPS (revue infra du 11 novembre 2026)"
+COPIE="${URL%.kdbx}-copie.kdbx"
+DEPLACE="${URL%.kdbx}-deplace.kdbx"
+code_http() { "${CURL[@]}" -o /dev/null -w '%{http_code}' "$@"; }
+verifier "COPY dans son dossier : 201" "^201$" "$(code_http -X COPY -H "Destination: $COPIE" "$URL")"
+verifier "MOVE dans son dossier : 201" "^201$" "$(code_http -X MOVE -H "Destination: $DEPLACE" "$COPIE")"
+verifier "MKCOL d'un sous-dossier : refusé (403)" "^403$" "$(code_http -X MKCOL "$DOSSIER/sous-dossier-recette/")"
+code_http -X DELETE "$DEPLACE" >/dev/null
+
+echo "== 7. Refus attendus"
+verifier "coffre dans un sous-dossier : refusé par lgs" "racine du dossier" \
+    "$("$LGS" sync a.kdbx -k cle.keyx --url "$DOSSIER/sous/coffre.kdbx" --user "$LGS_TEST_WEBDAV_USER" 2>&1)"
+verifier "nom de fichier temporaire : refusé par lgs" "temporaire" \
+    "$("$LGS" sync a.kdbx -k cle.keyx --url "$DOSSIER/coffre.kdbx.tmp" --user "$LGS_TEST_WEBDAV_USER" 2>&1)"
 verifier "http:// vers une autre machine : refus" "non chiffrée" \
     "$("$LGS" sync a.kdbx -k cle.keyx --url http://coffre.exemple.test/dav/x/c.kdbx --user x 2>&1)"
 verifier "sans le fichier clé : refus" "clé incorrecte" "$("$LGS" list a.kdbx 2>&1)"
+if [ "$BANC_LOCAL" = 1 ]; then
+    verifier "mauvais mot de passe WebDAV : refus (401)" "401" \
+        "$(LGS_WEBDAV_PASSWORD=mauvais "$LGS" sync a.kdbx -k cle.keyx "${SERVEUR[@]}" 2>&1)"
+    verifier "après un refus, synchronisation suspendue sans requête" "suspendue" \
+        "$("$LGS" sync a.kdbx -k cle.keyx "${SERVEUR[@]}" 2>&1)"
+    verifier "nouvelle saisie : synchronisation reprise" "synchronisé" \
+        "$("$LGS" sync a.kdbx -k cle.keyx "${SERVEUR[@]}" --new-credentials 2>&1)"
+else
+    echo "(serveur déployé : refus d'identifiants volontaires sautés, CrowdSec)"
+fi
 
-curl -s -o /dev/null -u "$LGS_TEST_WEBDAV_USER:$LGS_WEBDAV_PASSWORD" -X DELETE "$URL"
+code_http -X DELETE "$URL" >/dev/null
 echo
 echo "RÉSULTAT : $reussis réussis, $echecs échoués"
 [ "$echecs" -eq 0 ]

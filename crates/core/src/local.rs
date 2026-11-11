@@ -20,6 +20,10 @@
 //! Après un envoi, l'étiquette renvoyée par Apache est faible : elle n'est pas
 //! conservée. La synchronisation suivante télécharge le coffre et reconnaît sa
 //! propre version à son empreinte SHA-256, sans fusion inutile.
+//!
+//! Un refus d'identifiants (401) suspend la synchronisation, état enregistré,
+//! jusqu'à [`LocalVault::accept_new_credentials`] : une application qui
+//! réessaierait seule ferait bannir l'adresse de tout le foyer par CrowdSec.
 
 use std::path::{Path, PathBuf};
 
@@ -114,6 +118,7 @@ impl LocalVault {
             local_dirty: false,
             last_uploaded_sha256: None,
             last_sync_utc: Some(now()),
+            credentials_rejected_utc: None,
         };
         let local = Self {
             store,
@@ -161,6 +166,33 @@ impl LocalVault {
 
     /// Synchronise avec le serveur (voir la description du module).
     pub fn sync(&mut self, transport: &dyn Transport, options: &SyncOptions) -> Result<SyncReport> {
+        // Après un refus d'identifiants, aucune nouvelle tentative avant une
+        // nouvelle saisie : CrowdSec bannit l'adresse après cinq échecs en rafale.
+        if let Some(since) = &self.state.credentials_rejected_utc {
+            return Err(SyncError::CredentialsSuspended(since.clone()).into());
+        }
+        let outcome = self.sync_loop(transport, options);
+        if matches!(outcome, Err(Error::Sync(SyncError::Unauthorized))) {
+            self.state.credentials_rejected_utc = Some(now());
+            self.save_state()?;
+        }
+        outcome
+    }
+
+    /// Lève la suspension de la synchronisation, après une nouvelle saisie des
+    /// identifiants WebDAV par l'utilisateur.
+    pub fn accept_new_credentials(&mut self) -> Result<()> {
+        if self.state.credentials_rejected_utc.take().is_some() {
+            self.save_state()?;
+        }
+        Ok(())
+    }
+
+    fn sync_loop(
+        &mut self,
+        transport: &dyn Transport,
+        options: &SyncOptions,
+    ) -> Result<SyncReport> {
         let mut report = SyncReport::default();
         let mut attempts = 0;
         loop {

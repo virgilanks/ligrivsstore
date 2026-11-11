@@ -138,6 +138,8 @@ struct ServerState {
     always_concurrent: Option<Vec<u8>>,
     stores: u32,
     rejected: u32,
+    reject_credentials: bool,
+    fetches: u32,
 }
 
 impl MemoryServer {
@@ -180,11 +182,25 @@ impl MemoryServer {
     pub fn rejected(&self) -> u32 {
         self.state.lock().unwrap().rejected
     }
+
+    /// Refuse (401) ou accepte les identifiants.
+    pub fn reject_credentials(&self, reject: bool) {
+        self.state.lock().unwrap().reject_credentials = reject;
+    }
+
+    /// Nombre de téléchargements demandés.
+    pub fn fetches(&self) -> u32 {
+        self.state.lock().unwrap().fetches
+    }
 }
 
 impl Transport for MemoryServer {
     fn fetch(&self, if_none_match: Option<&str>) -> Result<Fetch, SyncError> {
         let mut s = self.state.lock().unwrap();
+        s.fetches += 1;
+        if s.reject_credentials {
+            return Err(SyncError::Unauthorized);
+        }
         let Some(body) = s.body.clone() else {
             return Ok(Fetch::NotFound);
         };
@@ -207,6 +223,9 @@ impl Transport for MemoryServer {
 
     fn store(&self, body: &[u8], precondition: &Precondition) -> Result<StoreOutcome, SyncError> {
         let mut s = self.state.lock().unwrap();
+        if s.reject_credentials {
+            return Err(SyncError::Unauthorized);
+        }
         let concurrent = if s.concurrent_writes.is_empty() {
             s.always_concurrent.clone()
         } else {
