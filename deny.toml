@@ -1,0 +1,38 @@
+# Contrôle des dépendances (cargo-deny) : licences compatibles avec un produit
+# fermé et payant, vulnérabilités connues (base RustSec), origines autorisées.
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+# Toute vulnérabilité connue fait échouer l'intégration continue.
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+# Licences permissives seulement : aucune licence à réciprocité (GPL, LGPL,
+# AGPL, MPL) n'est admise dans l'application.
+allow = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+# Nos propres paquets ne sont pas publiés.
+private = { ignore = true }
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

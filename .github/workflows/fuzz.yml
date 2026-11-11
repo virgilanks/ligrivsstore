@@ -1,0 +1,41 @@
+# Tests aléatoires guidés par la couverture (libFuzzer), une fois par semaine
+# et à la demande. Un cas trouvé est conservé en pièce jointe de l'exécution.
+name: Tests aléatoires (fuzzing)
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Cible ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [lire_entete, ouvrir_coffre]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Chaîne nightly et cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly install --locked cargo-fuzz
+      - name: Fuzzing (20 minutes)
+        run: |
+          mkdir -p fuzz/corpus/${{ matrix.target }}
+          cargo +nightly fuzz run ${{ matrix.target }} \
+            fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
+            -- -max_total_time=1200 -rss_limit_mb=2048
+      - name: Cas trouvés
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: fuzz/artifacts/
