@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Isolation</title>
+  </head>
+  <body>
+    <script>
+      // Motif d'isolation de Tauri : chaque message de l'interface passe ici,
+      // dans un cadre isolé, avant d'être chiffré vers le cœur Rust. Seules
+      // les commandes de l'application et les boîtes de dialogue de fichiers
+      // sont transmises.
+      const permises = new Set([
+        "status",
+        "default_paths",
+        "create_vault",
+        "open_vault",
+        "lock_vault",
+        "forget_vault",
+        "list_entries",
+        "get_entry",
+        "reveal_password",
+        "save_entry",
+        "delete_entry",
+        "retry_save",
+        "generate_password",
+        "passphrase_strength",
+        "plugin:dialog|open",
+        "plugin:dialog|save",
+      ]);
+      // Une commande non prévue est remplacée par une commande inexistante :
+      // le cœur la refuse et l'interface reçoit une erreur, au lieu d'un
+      // appel resté sans réponse. Les permissions de Tauri (capabilities)
+      // appliquent la même liste côté Rust.
+      window.__TAURI_ISOLATION_HOOK__ = (payload) => {
+        if (payload && permises.has(payload.cmd)) {
+          return payload;
+        }
+        return Object.assign({}, payload, { cmd: "commande_refusee_par_isolation" });
+      };
+    </script>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-# Architecture du noyau
+# Architecture
 
 Le noyau `ligrivsstore-core` regroupe tout ce qui touche aux secrets. Les applications (Windows en Tauri, Android en Kotlin, plus tard iPhone en Swift) l'appellent, sans réimplémenter le chiffrement, le format, la fusion ou la synchronisation.
 
@@ -87,11 +87,40 @@ Garanties vérifiées par les tests :
 | Mémoire | Clé du coffre, mots de passe saisis et générés, identifiants WebDAV : effacés à la destruction (`zeroize`) ; affichage masqué dans les journaux de débogage |
 | Fichiers locaux | Écriture atomique et relecture avant tout envoi ; dix sauvegardes ; droits restreints. Sous Windows, si un autre programme tient le fichier (antivirus, OneDrive, indexation), le remplacement est retenté pendant près de 2 secondes |
 | Fichiers clés | Créés au format XML 2.0 de KeePass (32 octets aléatoires et somme de contrôle) ; un fichier XML 2.0 endommagé est signalé comme tel ; les autres fichiers restent acceptés selon les règles de KeePass (décision 0009) |
-| Chaîne logicielle | Dépendances épinglées (`Cargo.lock`) ; licences et vulnérabilités connues contrôlées par `cargo-deny` ; actions GitHub épinglées par empreinte ; mises à jour proposées chaque semaine |
+| Chaîne logicielle | Dépendances épinglées (`Cargo.lock`, `package-lock.json`) ; licences et vulnérabilités connues contrôlées par `cargo-deny` et `npm audit` ; actions GitHub épinglées par empreinte ; mises à jour proposées chaque semaine |
+| Interface de l'application | Liste fermée de commandes, permissions de Tauri, motif d'isolation, politique de contenu stricte (décision 0010) ; le coffre déverrouillé et sa clé restent dans le processus Rust |
+
+## Application Windows (jalon 1)
+
+```text
+apps/windows/src        Svelte 5 : écrans et formulaires ; ne conserve aucun secret
+      │  14 commandes → cadre d'isolation (même liste) → message chiffré → permissions de Tauri
+apps/windows/src-tauri  Tauri 2 : relaie chaque commande vers la session, dans une tâche à part
+      │
+crates/app              ligrivsstore-app : session, réglages, messages, erreurs, robustesse
+      │
+crates/core             ligrivsstore-core : LocalVault (coffre, dérivation, stockage, synchronisation)
+```
+
+| Commandes | Rôle |
+|---|---|
+| `status`, `default_paths` | État de la session ; emplacements proposés à la création |
+| `create_vault`, `open_vault`, `lock_vault`, `forget_vault` | Cycle de vie du coffre |
+| `list_entries`, `get_entry`, `reveal_password` | Liste filtrée, fiche sans mot de passe, mot de passe sur demande |
+| `save_entry`, `delete_entry`, `retry_save` | Chaque modification est enregistrée aussitôt (écriture atomique, relue) ; en cas d'échec, l'application le signale et propose de réessayer |
+| `generate_password`, `passphrase_strength` | Générateur ; robustesse d'une phrase de passe (zxcvbn) |
+
+Fichiers sur le PC (emplacements proposés par défaut) :
+
+- coffre : `Documents\ligrivsstore\coffre.kdbx`, avec ses sauvegardes et son état de synchronisation ;
+- fichier clé : `%LOCALAPPDATA%\ligrivsstore-cles\coffre.keyx`, hors de OneDrive, donc jamais à côté du coffre sur un serveur, et hors du dossier de l'application, que la désinstallation peut effacer ;
+- réglages : `%APPDATA%\com.ligrivs.ligrivsstore\reglages.json`, qui ne retient que l'emplacement du dernier coffre et celui de son fichier clé.
+
+Le cloisonnement de l'interface, la création d'un coffre et les licences sont décrits dans la décision 0010.
 
 ## Intégration dans les applications
 
-- **Windows (J1)** : Tauri est en Rust ; l'application appelle directement `LocalVault`.
+- **Windows (J1)** : Tauri est en Rust ; la coquille appelle `ligrivsstore-app`, qui pilote `LocalVault`.
 - **Android (J2)** : liaisons Kotlin générées par UniFFI 0.32.2, dans une caisse dédiée (`crates/ffi`), qui exposera une interface volontairement réduite.
 - **iPhone (plus tard)** : mêmes liaisons, en Swift ; ouverture dans l'extension AutoFill avec `OpenLimits::ios_autofill()`.
 

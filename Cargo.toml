@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli"]
-# Le dossier fuzz/ est un espace de travail à part (cargo-fuzz, chaîne nightly).
-exclude = ["fuzz"]
+members = ["crates/core", "crates/cli", "crates/app"]
+# Espaces de travail à part : fuzz/ (cargo-fuzz, chaîne nightly) et la coquille
+# Tauri de l'application Windows, qui exige l'interface construite et WebView.
+exclude = ["fuzz", "apps/windows/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,6 +18,7 @@ repository = "https://github.com/virgilanks/ligrivsstore"
 
 [workspace.dependencies]
 ligrivsstore-core = { path = "crates/core", version = "0.1.0" }
+ligrivsstore-app = { path = "crates/app", version = "0.1.0" }
 # Lecture et écriture KDBX. Version épinglée : toute mise à jour se fait par une
 # demande de fusion dédiée, après relecture du changelog et passage de la suite
 # d'interopérabilité (voir docs/decisions/0002-noyau-rust.md).
@@ -38,6 +40,8 @@ ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 clap = { version = "4.6.7", features = ["derive", "env"] }
+# Estimation de la robustesse des phrases de passe (application).
+zxcvbn = "=3.1.1"
 tempfile = "3.27.0"
 proptest = "1.12.0"
 

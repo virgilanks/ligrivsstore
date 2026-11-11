@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "principale",
+  "description": "Fenêtre principale : les commandes de l'application et les boîtes de dialogue d'ouverture et d'enregistrement de fichiers, rien d'autre (ni événements, ni gestion de fenêtres, ni messages). Le cadre d'isolation applique la même liste.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    "allow-status",
+    "allow-default-paths",
+    "allow-create-vault",
+    "allow-open-vault",
+    "allow-lock-vault",
+    "allow-forget-vault",
+    "allow-list-entries",
+    "allow-get-entry",
+    "allow-reveal-password",
+    "allow-save-entry",
+    "allow-delete-entry",
+    "allow-retry-save",
+    "allow-generate-password",
+    "allow-passphrase-strength",
+    "dialog:allow-open",
+    "dialog:allow-save"
+  ]
+}

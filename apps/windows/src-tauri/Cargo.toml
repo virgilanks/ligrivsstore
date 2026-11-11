@@ -1,0 +1,57 @@
+# Coquille Tauri de l'application ligrivsstore pour Windows.
+#
+# Espace de travail à part (exclu de celui du dépôt) : sa compilation exige
+# l'interface construite (dossier ../dist) et WebView. Toute la logique est
+# dans le paquet ligrivsstore-app, testé avec le reste du dépôt.
+[package]
+name = "ligrivsstore-windows"
+description = "Application ligrivsstore pour Windows"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license-file = "../../../LICENSE"
+publish = false
+authors = ["ligrivs"]
+repository = "https://github.com/virgilanks/ligrivsstore"
+
+[[bin]]
+name = "ligrivsstore"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = ["isolation"] }
+
+[dependencies]
+ligrivsstore-app = { path = "../../../crates/app", version = "0.1.0" }
+tauri = { version = "=2.12.5", features = ["isolation"] }
+tauri-plugin-dialog = "=2.8.4"
+tauri-plugin-single-instance = "=2.5.5"
+serde = { version = "1.0.229", features = ["derive"] }
+zeroize = "1.9.1"
+
+[lints.rust]
+unsafe_code = "forbid"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+# Binaire plus petit et sans symboles de débogage.
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+# Argon2 reste rapide en mode développement.
+[profile.dev.package."*"]
+opt-level = 3
+
+[workspace]

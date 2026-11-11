@@ -2,7 +2,7 @@
 
 Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec extension Chrome et Edge) et Android, puis iPhone, iPad et Mac. Chaque terminal garde son coffre chiffré et le synchronise avec le serveur « coffre » hébergé sur l'infrastructure Zanzibar.
 
-> **État : jalon 0 (fondations).** Le dépôt contient le noyau partagé, un outil de recette en ligne de commande, les tests et l'intégration continue. Les applications arrivent aux jalons suivants.
+> **État : jalon 1 en cours (semaine 1 sur 5).** Le noyau, l'outil de recette, les tests et l'intégration continue sont en place et recettés (jalon 0). L'application Windows prend forme : création et ouverture du coffre, entrées, générateur, installateur. La synchronisation, l'extension et le remplissage arrivent dans les semaines suivantes.
 
 ## Principes
 
@@ -18,6 +18,8 @@ Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec
 |---|---|
 | `crates/core` | Noyau `ligrivsstore-core` : coffre, contrôle d'en-tête, dérivation, stockage, fusion, synchronisation, générateur |
 | `crates/cli` | Outil `lgs`, pour le développement, la recette et le diagnostic (ce n'est pas l'application) |
+| `crates/app` | Logique de l'application de bureau `ligrivsstore-app` : session, réglages, messages et erreurs de l'interface, robustesse des phrases de passe (sans Tauri, testée avec le reste) |
+| `apps/windows` | Application Windows : interface Svelte (`src`), coquille Tauri (`src-tauri`), cadre d'isolation (`isolation`) |
 | `fuzz` | Cibles de tests aléatoires guidés (cargo-fuzz), lancées chaque semaine |
 | `scripts` | Banc WebDAV local (Apache derrière un relais HTTPS), tests du serveur et scénario de recette de bout en bout |
 | `server/coffre` | Fichiers du service « coffre » revus par la conversation « infra » (11 novembre 2026) : fiche de déploiement et configuration |
@@ -45,6 +47,20 @@ scripts/scenario-synchro.sh
 sudo scripts/banc-webdav.sh arreter
 ```
 
+### Application Windows
+
+Prérequis supplémentaires : [Node.js](https://nodejs.org) 22.12 ou plus récent, et WebView2 (déjà présent sous Windows 11).
+
+```powershell
+cd apps\windows
+npm ci                    # dépendances de l'interface, versions figées
+npm run check             # vérification de l'interface (svelte-check)
+npm run tauri dev         # application en mode développement
+npm run tauri build       # installateur dans src-tauri\target\release\bundle\nsis
+```
+
+L'intégration continue produit aussi l'installateur à chaque demande de fusion : fichier `ligrivsstore-installateur-windows` de l'exécution, conservé 30 jours. Il n'est pas encore signé : Windows SmartScreen avertit à l'installation.
+
 ## L'outil `lgs`
 
 Les secrets ne passent jamais par la ligne de commande. Ils sont lus dans des variables d'environnement : `LGS_PASSWORD` (coffre), `LGS_WEBDAV_PASSWORD` (serveur) et `LGS_ENTRY_PASSWORD` (entrée).
@@ -67,8 +83,8 @@ Fichier clé : `lgs keyfile cle.keyx` en crée un au format XML 2.0 de KeePass, 
 
 | Jalon | Contenu |
 |---|---|
-| J0 — Fondations | Noyau, outil de recette, tests, intégration continue (**ce dépôt**) |
-| J1 — Windows et extension | Application Tauri ; extension Chrome et Edge (messagerie native, appairage) ; correspondance des domaines ; phrases de passe |
+| J0 — Fondations | Noyau, outil de recette, tests, intégration continue (recetté) |
+| J1 — Windows et extension (**en cours**) | Application Tauri ; extension Chrome et Edge (messagerie native, appairage) ; correspondance des domaines ; phrases de passe ; enregistrement des nouveaux identifiants |
 | J2 — Android | Application Kotlin (liaisons UniFFI) ; service de remplissage ; biométrie |
 | J3 — Durcissement et bêta | Revue de sécurité interne ; conflits multi-terminaux ; bêta familiale |
 | Ensuite | iPhone et iPad, Mac et Safari (dès qu'un Mac est disponible) ; Firefox ; audit externe ; vente dans les stores |
@@ -77,4 +93,4 @@ Les choix sont expliqués dans [docs/architecture.md](docs/architecture.md) et d
 
 ## Licence
 
-Logiciel propriétaire : voir [LICENSE](LICENSE). Les dépendances sont toutes sous licences permissives (contrôle par `cargo-deny`).
+Logiciel propriétaire : voir [LICENSE](LICENSE). Les dépendances sont sous licences permissives, contrôlées par `cargo-deny`. Seule exception : cinq paquets sous MPL-2.0 venus de Tauri, admis un à un (décision 0010) ; un seul figure dans le programme livré, sans modification.

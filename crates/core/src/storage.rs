@@ -202,8 +202,9 @@ pub(crate) fn write_new_file(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 /// Remplace `path` de façon atomique par `bytes` (fichier temporaire, puis
-/// renommage).
-pub(crate) fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
+/// renommage), sans relecture ni sauvegarde : pour les petits fichiers
+/// annexes (état de synchronisation, réglages des applications).
+pub fn replace_file(path: &Path, bytes: &[u8]) -> Result<()> {
     let directory = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
         _ => PathBuf::from("."),

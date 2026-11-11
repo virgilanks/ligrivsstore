@@ -1,0 +1,449 @@
+/* Interface de ligrivsstore : styles globaux, sans ressource distante. */
+
+:root {
+  --fond: #f6f7f9;
+  --surface: #ffffff;
+  --texte: #1a1d23;
+  --discret: #5b6472;
+  --bordure: #d6dae1;
+  --accent: #1f3864;
+  --accent-texte: #ffffff;
+  --accent-clair: #e3e9f5;
+  --erreur: #b3261e;
+  --erreur-fond: #fdecea;
+  --alerte-fond: #fff4d6;
+  --succes: #2e7d32;
+  --focus: #2f6fdb;
+  --rayon: 6px;
+  color-scheme: light dark;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--texte);
+  background: var(--fond);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #16181d;
+    --surface: #1f2229;
+    --texte: #e8eaee;
+    --discret: #a3abb8;
+    --bordure: #3a3f4a;
+    --accent: #8fb0ea;
+    --accent-texte: #0e1726;
+    --accent-clair: #263552;
+    --erreur: #f2b8b5;
+    --erreur-fond: #3b1d1b;
+    --alerte-fond: #3a3220;
+    --succes: #8bc98e;
+    --focus: #8fb0ea;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Cadre d'isolation de Tauri : Tauri le masque par une feuille de style
+   ajoutée en ligne, que notre politique de sécurité (CSP : style-src 'self')
+   bloque à juste titre. Sans cette règle, servie par l'application, le cadre
+   apparaît en bas de la page. Le cadre reste actif une fois masqué. */
+#__tauri_isolation__ {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--fond);
+}
+
+main {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+h1 {
+  font-size: 1.45rem;
+  margin: 0 0 8px;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin: 0 0 12px;
+}
+
+p {
+  margin: 0 0 12px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 24px 28px;
+  max-width: 720px;
+  margin: 24px auto;
+}
+
+.panel.narrow {
+  max-width: 520px;
+}
+
+.lead {
+  font-size: 1.05rem;
+}
+
+.muted {
+  color: var(--discret);
+}
+
+.small {
+  font-size: 0.86rem;
+}
+
+.centered {
+  text-align: center;
+  margin-top: 48px;
+}
+
+.path {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.85rem;
+  color: var(--discret);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  color: var(--erreur);
+  background: var(--erreur-fond);
+  border-radius: var(--rayon);
+  padding: 6px 10px;
+}
+
+.note {
+  background: var(--alerte-fond);
+  border-radius: var(--rayon);
+  padding: 6px 10px;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin: 14px 0 4px;
+}
+
+label.option,
+.checks label {
+  font-weight: 400;
+  margin: 6px 0;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="search"],
+textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--texte);
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 7px 10px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+fieldset {
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  margin: 18px 0 8px;
+  padding: 6px 14px 10px;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 6px;
+}
+
+button {
+  font: inherit;
+  color: var(--texte);
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 7px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-texte);
+  font-weight: 600;
+}
+
+button.link {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding-left: 0;
+  text-decoration: underline;
+}
+
+button.danger {
+  background: var(--erreur);
+  border-color: var(--erreur);
+  color: var(--surface);
+}
+
+button.danger-outline {
+  color: var(--erreur);
+}
+
+button.small-button {
+  padding: 2px 10px;
+  font-size: 0.86rem;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row input {
+  flex: 1;
+}
+
+.indent {
+  margin-left: 26px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.choices {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+/* Robustesse de la phrase de passe */
+.strength .bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bordure);
+  margin: 6px 0 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.strength .bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  width: 0;
+}
+
+.strength .bar.score-0::after { width: 10%; background: var(--erreur); }
+.strength .bar.score-1::after { width: 30%; background: var(--erreur); }
+.strength .bar.score-2::after { width: 55%; background: #d18b00; }
+.strength .bar.score-3::after { width: 80%; background: var(--succes); }
+.strength .bar.score-4::after { width: 100%; background: var(--succes); }
+.strength .bar.empty::after { width: 0; }
+
+/* Générateur */
+.generator {
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 10px 14px;
+  margin: 10px 0;
+  background: var(--fond);
+}
+
+.generator .row label {
+  margin: 0;
+}
+
+.generator .value {
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.checks {
+  display: flex;
+  gap: 4px 18px;
+  flex-wrap: wrap;
+}
+
+.generated code {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 1.05rem;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* Coffre */
+.vault {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 48px);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.toolbar .heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbar .heading p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar .actions {
+  margin-top: 0;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.banner {
+  background: var(--alerte-fond);
+  border-radius: var(--rayon);
+  padding: 8px 12px;
+  margin: 8px 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+}
+
+.list li button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--bordure);
+  border-radius: 0;
+  padding: 8px 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.list li:last-child button {
+  border-bottom: none;
+}
+
+.list li button.current {
+  background: var(--accent-clair);
+}
+
+.list .title {
+  font-weight: 600;
+}
+
+.list .sub {
+  font-size: 0.85rem;
+  color: var(--discret);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.pane {
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 20px 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.detail dl {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.detail dt {
+  color: var(--discret);
+}
+
+.detail dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.detail .notes {
+  white-space: pre-wrap;
+}
+
+.selectable {
+  user-select: text;
+}
+
+code {
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
