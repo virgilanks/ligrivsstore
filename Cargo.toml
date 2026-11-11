@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli", "crates/app"]
+members = ["crates/core", "crates/cli", "crates/app", "crates/win"]
 # Espaces de travail à part : fuzz/ (cargo-fuzz, chaîne nightly) et la coquille
 # Tauri de l'application Windows, qui exige l'interface construite et WebView.
 exclude = ["fuzz", "apps/windows/src-tauri"]
@@ -19,6 +19,7 @@ repository = "https://github.com/virgilanks/ligrivsstore"
 [workspace.dependencies]
 ligrivsstore-core = { path = "crates/core", version = "0.1.0" }
 ligrivsstore-app = { path = "crates/app", version = "0.1.0" }
+ligrivsstore-win = { path = "crates/win", version = "0.1.0" }
 # Lecture et écriture KDBX. Version épinglée : toute mise à jour se fait par une
 # demande de fusion dédiée, après relecture du changelog et passage de la suite
 # d'interopérabilité (voir docs/decisions/0002-noyau-rust.md).

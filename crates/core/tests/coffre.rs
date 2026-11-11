@@ -240,3 +240,147 @@ fn passwords_are_returned_in_zeroizing_buffers() {
     let password: Zeroizing<String> = vault.entry(&id).unwrap().password;
     assert_eq!(password.as_str(), "secret");
 }
+
+#[test]
+fn reserved_entries_carry_their_role_across_saves_and_merges() {
+    use ligrivsstore_core::{ROLE_FIELD, SYNC_ROLE};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("coffre.kdbx");
+    let mut local = LocalVault::create(&path, "Essai", key(), fast_kdf()).unwrap();
+    let ordinary = local
+        .vault_mut()
+        .add_entry(&entry("Banque", "secret"))
+        .unwrap();
+    assert_eq!(local.vault().role_entry(SYNC_ROLE), None);
+    let reserved = local
+        .vault_mut()
+        .add_role_entry(&entry("Serveur", "mot de passe WebDAV"), SYNC_ROLE)
+        .unwrap();
+    local.save().unwrap();
+
+    let reopened = LocalVault::open(&path, key(), OpenLimits::default()).unwrap();
+    let vault = reopened.vault();
+    assert_eq!(vault.role_entry(SYNC_ROLE), Some(reserved.clone()));
+    let roles: Vec<_> = vault
+        .entries()
+        .into_iter()
+        .map(|e| (e.id, e.role))
+        .collect();
+    assert!(roles.contains(&(ordinary, None)));
+    assert!(roles.contains(&(reserved.clone(), Some(SYNC_ROLE.to_owned()))));
+    // Le rôle est un attribut ordinaire pour les autres applications KeePass.
+    let raw = vault
+        .database()
+        .iter_all_entries()
+        .find(|e| e.id().uuid().to_string() == reserved)
+        .unwrap();
+    assert_eq!(raw.get(ROLE_FIELD), Some(SYNC_ROLE));
+
+    // Modifier l'entrée réservée garde son rôle ; la fusion le transmet.
+    let mut other = vault.clone();
+    other
+        .update_entry(&reserved, &entry("Serveur", "nouveau mot de passe"))
+        .unwrap();
+    let mut merged = vault.clone();
+    merged.merge_from(&other).unwrap();
+    assert_eq!(merged.role_entry(SYNC_ROLE), Some(reserved.clone()));
+    assert_eq!(
+        merged.entry(&reserved).unwrap().password.as_str(),
+        "nouveau mot de passe"
+    );
+    assert!(merged.add_role_entry(&entry("X", "y"), " ").is_err());
+}
+
+#[test]
+fn restoring_a_backup_brings_entries_back_without_losing_anything() {
+    use ligrivsstore_core::SYNC_ROLE;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("coffre.kdbx");
+    let mut local = LocalVault::create(&path, "Essai", key(), fast_kdf()).unwrap();
+    let banque = local.vault_mut().add_entry(&entry("Banque", "v1")).unwrap();
+    let mail = local
+        .vault_mut()
+        .add_entry(&entry("Messagerie", "m1"))
+        .unwrap();
+    let serveur = local
+        .vault_mut()
+        .add_role_entry(&entry("Serveur", "w1"), SYNC_ROLE)
+        .unwrap();
+    local.save().unwrap();
+
+    // Après la sauvegarde : une modification, une suppression, un ajout, et un
+    // nouveau mot de passe du serveur.
+    local
+        .vault_mut()
+        .update_entry(&banque, &entry("Banque", "v2"))
+        .unwrap();
+    local.vault_mut().delete_entry(&mail).unwrap();
+    let journal = local
+        .vault_mut()
+        .add_entry(&entry("Journal", "j1"))
+        .unwrap();
+    local
+        .vault_mut()
+        .update_entry(&serveur, &entry("Serveur", "w2"))
+        .unwrap();
+    local.save().unwrap();
+
+    let backups = local.backups().unwrap();
+    // La sauvegarde la plus récente est l'état d'avant ces changements.
+    let newest = backups.first().unwrap();
+    assert!(newest.replaced_utc.as_deref().unwrap().ends_with('Z'));
+    let name = newest
+        .path
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let report = local.restore_backup(&name).unwrap();
+    assert_eq!(report.restored, 1, "{report:?}");
+    assert_eq!(report.recreated, 1, "{report:?}");
+    assert_eq!(report.skipped, 0);
+
+    let vault = LocalVault::open(&path, key(), OpenLimits::default()).unwrap();
+    let vault = vault.vault();
+    let banque_now = vault.entry(&banque).unwrap();
+    assert_eq!(banque_now.password.as_str(), "v1");
+    assert!(
+        banque_now.history_len >= 2,
+        "la version v2 reste dans l'historique"
+    );
+    let titles: Vec<_> = vault.entries().into_iter().map(|e| e.title).collect();
+    assert!(titles.contains(&"Messagerie".to_owned()), "{titles:?}");
+    assert!(vault.entry(&journal).is_ok(), "l'ajout postérieur reste");
+    assert_eq!(
+        vault.entry(&serveur).unwrap().password.as_str(),
+        "w2",
+        "l'entrée réservée n'est pas rétablie"
+    );
+
+    // Les noms inconnus et les fichiers hors du dossier des sauvegardes sont
+    // refusés.
+    assert!(local.open_backup("inconnu.kdbx").is_err());
+    assert!(local.open_backup("../coffre.kdbx").is_err());
+}
+
+#[test]
+fn a_backup_of_another_vault_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("coffre.kdbx");
+    let mut local = LocalVault::create(&path, "Essai", key(), fast_kdf()).unwrap();
+    local.vault_mut().add_entry(&entry("A", "a")).unwrap();
+    local.save().unwrap();
+    // Un autre coffre, même clé, déposé dans le dossier des sauvegardes.
+    let stranger = Vault::create("Étranger", fast_kdf())
+        .unwrap()
+        .to_bytes(&key())
+        .unwrap();
+    let backups_dir = dir.path().join("coffre.kdbx.sauvegardes");
+    std::fs::create_dir_all(&backups_dir).unwrap();
+    let intrus = "coffre.29991231T235959.000000Z.000.kdbx";
+    std::fs::write(backups_dir.join(intrus), stranger).unwrap();
+    assert!(matches!(
+        local.open_backup(intrus),
+        Err(Error::DifferentVaults)
+    ));
+}

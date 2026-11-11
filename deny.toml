@@ -21,6 +21,9 @@ allow = [
     "Apache-2.0",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    # Boost Software License : clipboard-win et error-code (presse-papiers de
+    # Windows), aussi permissive que MIT.
+    "BSL-1.0",
     "CDLA-Permissive-2.0",
     "ISC",
     "MIT",

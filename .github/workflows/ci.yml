@@ -63,6 +63,10 @@ jobs:
           }
           Expand-Archive $archive -DestinationPath $env:RUNNER_TEMP
           Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $env:RUNNER_TEMP "KeePassXC-2.8.0-x64")
+      - name: Analyse statique du code propre à Windows (clippy)
+        # Le travail Linux ne voit pas ce code (ligrivsstore-win, cfg(windows)) :
+        # notamment les blocs unsafe et leurs justifications.
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests, dont l'interopérabilité avec KeePassXC 2.8.0
         run: cargo test --workspace --locked
         env:

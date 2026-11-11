@@ -37,7 +37,7 @@ use crate::storage::{BackupInfo, LocalStore};
 use crate::sync::{
     Fetch, Precondition, StoreOutcome, SyncError, SyncOptions, SyncReport, SyncState, Transport,
 };
-use crate::vault::{Vault, VaultKey};
+use crate::vault::{RestoreReport, Vault, VaultKey};
 
 /// Nombre de sauvegardes locales conservées.
 pub const DEFAULT_BACKUPS: usize = 10;
@@ -154,6 +154,40 @@ impl LocalVault {
     /// Sauvegardes locales, de la plus récente à la plus ancienne.
     pub fn backups(&self) -> Result<Vec<BackupInfo>> {
         self.store.backups()
+    }
+
+    /// Ouvre, avec la clé du coffre, l'une de ses sauvegardes locales,
+    /// désignée par son nom de fichier (voir [`LocalVault::backups`]). Seuls
+    /// les fichiers du dossier des sauvegardes de ce coffre sont acceptés.
+    pub fn open_backup(&self, file_name: &str) -> Result<Vault> {
+        let backup = self
+            .backups()?
+            .into_iter()
+            .find(|b| {
+                b.path
+                    .file_name()
+                    .is_some_and(|n| n == std::ffi::OsStr::new(file_name))
+            })
+            .ok_or_else(|| Error::InvalidInput(format!("sauvegarde introuvable : {file_name}")))?;
+        let bytes = crate::storage::read_vault(&backup.path)?;
+        let vault = Vault::open(&bytes, &self.key, &self.limits)?;
+        if vault.identity() != self.vault.identity() {
+            return Err(Error::DifferentVaults);
+        }
+        Ok(vault)
+    }
+
+    /// Rétablit les entrées d'une sauvegarde locale (voir
+    /// [`Vault::restore_entries_from`]), puis enregistre le coffre. L'état
+    /// d'avant la restauration devient la sauvegarde la plus récente : la
+    /// restauration elle-même peut être annulée.
+    pub fn restore_backup(&mut self, file_name: &str) -> Result<RestoreReport> {
+        let backup = self.open_backup(file_name)?;
+        let report = self.vault.restore_entries_from(&backup)?;
+        if report.restored + report.recreated > 0 {
+            self.save()?;
+        }
+        Ok(report)
     }
 
     /// Enregistre le coffre (écriture atomique et relecture de contrôle) et le

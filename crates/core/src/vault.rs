@@ -91,6 +91,15 @@ impl fmt::Debug for VaultKey {
     }
 }
 
+/// Champ personnalisé qui marque une entrée réservée à l'application et
+/// indique son rôle (par exemple [`SYNC_ROLE`]). Les autres applications
+/// KeePass l'affichent comme un attribut ordinaire.
+pub const ROLE_FIELD: &str = "ligrivsstore-role";
+
+/// Rôle de l'entrée qui garde l'adresse, le compte et le mot de passe du
+/// serveur « coffre » (décision D4 : ces identifiants vivent dans le coffre).
+pub const SYNC_ROLE: &str = "synchronisation";
+
 /// Champs saisis pour une entrée.
 #[derive(Clone, Default)]
 pub struct EntryInput {
@@ -155,6 +164,9 @@ pub struct EntrySummary {
     pub username: String,
     /// Date de dernière modification (UTC, ISO 8601).
     pub modified: Option<String>,
+    /// Rôle d'une entrée réservée à l'application ([`ROLE_FIELD`]), sinon
+    /// `None`.
+    pub role: Option<String>,
 }
 
 /// Détail d'une entrée, mot de passe compris.
@@ -237,6 +249,21 @@ impl MergeReport {
         self.relocated += other.relocated;
         self.warnings.extend(other.warnings);
     }
+}
+
+/// Bilan d'une restauration d'entrées depuis une sauvegarde.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RestoreReport {
+    /// Entrées remises dans l'état de la sauvegarde ; la version remplacée
+    /// rejoint leur historique.
+    pub restored: usize,
+    /// Entrées supprimées depuis la sauvegarde, recréées.
+    pub recreated: usize,
+    /// Entrées identiques dans la sauvegarde et dans le coffre.
+    pub unchanged: usize,
+    /// Entrées écartées, car un champ dépasse les limites de l'application
+    /// (entrée créée par une autre application).
+    pub skipped: usize,
 }
 
 /// Coffre ouvert en mémoire.
@@ -407,6 +434,83 @@ impl Vault {
 
     /// Ajoute une entrée à la racine du coffre ; renvoie son identifiant.
     pub fn add_entry(&mut self, input: &EntryInput) -> Result<String> {
+        self.insert_entry(input, None)
+    }
+
+    /// Ajoute une entrée réservée à l'application, marquée par son rôle
+    /// ([`ROLE_FIELD`]) ; renvoie son identifiant.
+    pub fn add_role_entry(&mut self, input: &EntryInput, role: &str) -> Result<String> {
+        if role.trim().is_empty() {
+            return Err(Error::InvalidInput("rôle d'entrée vide".into()));
+        }
+        self.insert_entry(input, Some(role))
+    }
+
+    /// Identifiant de l'entrée qui tient le rôle `role`, hors corbeille. Si
+    /// plusieurs entrées le tiennent (deux terminaux réglés avant leur
+    /// première fusion), la plus récemment modifiée l'emporte.
+    pub fn role_entry(&self, role: &str) -> Option<String> {
+        self.entries()
+            .into_iter()
+            .filter(|e| e.role.as_deref() == Some(role))
+            .max_by(|a, b| a.modified.cmp(&b.modified).then_with(|| a.id.cmp(&b.id)))
+            .map(|e| e.id)
+    }
+
+    /// Rétablit les entrées d'une sauvegarde de ce même coffre.
+    ///
+    /// Chaque entrée de la sauvegarde redevient la version actuelle : la
+    /// version remplacée rejoint son historique, et la modification sera
+    /// propagée aux autres terminaux comme toute autre. Une entrée supprimée
+    /// depuis est recréée, sous un nouvel identifiant, car sa suppression
+    /// reste inscrite pour les autres terminaux. Les entrées créées depuis la
+    /// sauvegarde sont conservées ; les entrées réservées à l'application ne
+    /// sont jamais rétablies.
+    pub fn restore_entries_from(&mut self, backup: &Vault) -> Result<RestoreReport> {
+        if self.db.root().id() != backup.db.root().id() {
+            return Err(Error::DifferentVaults);
+        }
+        let current: std::collections::HashSet<String> =
+            self.entries().into_iter().map(|e| e.id).collect();
+        let mut work = self.clone();
+        let mut report = RestoreReport::default();
+        for summary in backup.entries() {
+            if summary.role.is_some() {
+                continue;
+            }
+            let old = backup.entry(&summary.id)?;
+            let title = if old.title.trim().is_empty() {
+                "(sans titre)".to_owned()
+            } else {
+                old.title.clone()
+            };
+            let input = EntryInput {
+                title,
+                url: old.url.clone(),
+                username: old.username.clone(),
+                password: old.password.clone(),
+                notes: old.notes.clone(),
+            };
+            if input.validate().is_err() {
+                report.skipped += 1;
+                continue;
+            }
+            if current.contains(&summary.id) {
+                if work.update_entry(&summary.id, &input)? {
+                    report.restored += 1;
+                } else {
+                    report.unchanged += 1;
+                }
+            } else {
+                work.add_entry(&input)?;
+                report.recreated += 1;
+            }
+        }
+        *self = work;
+        Ok(report)
+    }
+
+    fn insert_entry(&mut self, input: &EntryInput, role: Option<&str>) -> Result<String> {
         input.validate()?;
         let mut root = self.db.root_mut();
         let mut entry = root.add_entry();
@@ -416,6 +520,9 @@ impl Vault {
             e.set_unprotected(fields::USERNAME, input.username.as_str());
             e.set_protected(fields::PASSWORD, input.password.as_str());
             e.set_unprotected(fields::NOTES, input.notes.as_str());
+            if let Some(role) = role {
+                e.set_unprotected(ROLE_FIELD, role);
+            }
         });
         Ok(entry.id().uuid().to_string())
     }
@@ -557,6 +664,11 @@ fn summary(entry: &EntryRef<'_>) -> EntrySummary {
             .times
             .last_modification
             .map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        role: entry
+            .get(ROLE_FIELD)
+            .map(str::trim)
+            .filter(|r| !r.is_empty())
+            .map(str::to_owned),
     }
 }
 
