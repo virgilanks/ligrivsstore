@@ -1,0 +1,11 @@
+Copyright © 2026 ligrivs. Tous droits réservés.
+
+Ce logiciel, son code source et sa documentation sont la propriété exclusive
+de ligrivs. Aucune licence, expresse ou implicite, n'est accordée : toute
+copie, modification, distribution ou utilisation en dehors du cadre convenu
+avec ligrivs est interdite sans autorisation écrite.
+
+Les composants tiers utilisés par ce logiciel restent régis par leurs propres
+licences, toutes permissives (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode-3.0,
+CDLA-Permissive-2.0). Leur liste est contrôlée à chaque compilation par
+cargo-deny (fichier deny.toml).

@@ -1,0 +1,21 @@
+/target/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/
+
+# Garde-fou : jamais de coffre ni de fichier clé réel dans le dépôt.
+*.kdbx
+*.kdb
+*.keyx
+*.key
+*.synchro.json
+*.sauvegardes/
+.env
+
+# Éditeurs et systèmes
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
