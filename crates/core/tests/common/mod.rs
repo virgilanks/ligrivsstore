@@ -109,7 +109,7 @@ pub fn set_u64_parameter(dictionary: &mut [u8], name: u8, value: u64) {
 pub fn keepassxc_cli() -> Option<PathBuf> {
     let found = std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
-            .map(|dir| dir.join("keepassxc-cli"))
+            .map(|dir| dir.join(format!("keepassxc-cli{}", std::env::consts::EXE_SUFFIX)))
             .find(|candidate| candidate.is_file())
     });
     if found.is_none() {

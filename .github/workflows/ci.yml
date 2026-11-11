@@ -50,8 +50,23 @@ jobs:
       - name: Chaîne Rust épinglée (rust-toolchain.toml)
         run: rustup toolchain install || rustup show
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Tests
+      - name: KeePassXC 2.8.0 portable (interopérabilité sous Windows)
+        shell: pwsh
+        run: |
+          # Archive officielle, vérifiée par son empreinte SHA-256 : la même que
+          # celle du fichier KeePassXC-2.8.0-x64.zip.DIGEST publié avec la version.
+          $archive = Join-Path $env:RUNNER_TEMP "KeePassXC-2.8.0-x64.zip"
+          Invoke-WebRequest -Uri "https://github.com/keepassxreboot/keepassxc/releases/download/2.8.0/KeePassXC-2.8.0-x64.zip" -OutFile $archive
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne "48ff4f088e9ce70e241da1270e5081528dba77c38b17dae4aa6690ffc50fc828") {
+            throw "empreinte inattendue pour KeePassXC 2.8.0 : $hash"
+          }
+          Expand-Archive $archive -DestinationPath $env:RUNNER_TEMP
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $env:RUNNER_TEMP "KeePassXC-2.8.0-x64")
+      - name: Tests, dont l'interopérabilité avec KeePassXC 2.8.0
         run: cargo test --workspace --locked
+        env:
+          LGS_REQUIRE_KEEPASSXC: "1"
 
   interoperabilite:
     name: KeePassXC et serveur « coffre » (banc Apache derrière un relais HTTPS)

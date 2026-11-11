@@ -61,6 +61,8 @@ lgs info coffre.kdbx                         # format et dérivation, sans clé
 lgs backups coffre.kdbx                      # sauvegardes locales
 ```
 
+Fichier clé : `lgs keyfile cle.keyx` en crée un au format XML 2.0 de KeePass, celui de KeePassXC. Il s'utilise ensuite avec `-k cle.keyx` sur chaque commande. Gardez-en une copie à part : sans lui, le coffre ne s'ouvre plus.
+
 ## Feuille de route
 
 | Jalon | Contenu |

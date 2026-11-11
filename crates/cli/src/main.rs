@@ -15,7 +15,7 @@ use clap::{Args, Parser, Subcommand};
 use ligrivsstore_core::generator::{PasswordPolicy, generate_password};
 use ligrivsstore_core::{
     EntryInput, Error, KdfParams, LocalVault, OpenLimits, SyncOptions, VaultKey, WebDavTransport,
-    header,
+    header, keyfile, storage,
 };
 use zeroize::Zeroizing;
 
@@ -160,6 +160,11 @@ enum Command {
         #[command(flatten)]
         server: ServerArgs,
     },
+    /// Crée un fichier clé au format XML 2.0 de KeePass (celui de KeePassXC).
+    Keyfile {
+        /// Fichier à créer ; un fichier existant n'est jamais remplacé.
+        path: PathBuf,
+    },
     /// Affiche l'en-tête d'un coffre (format, chiffrement, dérivation), sans clé.
     Info {
         /// Fichier du coffre.
@@ -256,7 +261,11 @@ fn run(command: Command) -> Result<(), Error> {
         }
         Command::List { vault } => {
             let local = open(&vault)?;
-            for entry in local.vault().entries() {
+            let entries = local.vault().entries();
+            if entries.is_empty() {
+                eprintln!("aucune entrée dans ce coffre");
+            }
+            for entry in entries {
                 println!("{}\t{}\t{}", entry.title, entry.username, entry.url);
             }
         }
@@ -324,7 +333,7 @@ fn run(command: Command) -> Result<(), Error> {
         Command::Merge { vault, other } => {
             let key = vault_key(&vault)?;
             let mut local = LocalVault::open(&vault.file, key.clone(), OpenLimits::default())?;
-            let bytes = std::fs::read(&other)?;
+            let bytes = storage::read_vault(&other)?;
             let other = ligrivsstore_core::Vault::open(&bytes, &key, &OpenLimits::default())?;
             let report = local.vault_mut().merge_from(&other)?;
             local.save()?;
@@ -375,8 +384,16 @@ fn run(command: Command) -> Result<(), Error> {
                 local.vault().entries().len()
             );
         }
+        Command::Keyfile { path } => {
+            keyfile::create(&path)?;
+            println!(
+                "fichier clé créé : {} (format XML 2.0 de KeePass)",
+                path.display()
+            );
+            println!("conservez-en une copie à part : sans lui, le coffre ne s'ouvre plus");
+        }
         Command::Info { file } => {
-            let bytes = std::fs::read(&file)?;
+            let bytes = storage::read_vault(&file)?;
             let info = header::inspect(&bytes)?;
             println!("format : KDBX {}.{}", info.major, info.minor);
             println!("chiffrement : {:?}", info.cipher);
@@ -431,7 +448,7 @@ fn vault_key(args: &VaultArgs) -> Result<VaultKey, Error> {
         key = key.with_password(&password);
     }
     if let Some(path) = &args.keyfile {
-        let bytes = Zeroizing::new(std::fs::read(path)?);
+        let bytes = keyfile::read(path)?;
         key = key.with_keyfile(&bytes)?;
     }
     if key.is_empty() {

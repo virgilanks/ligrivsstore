@@ -249,3 +249,61 @@ fn edits_made_with_keepassxc_are_merged_by_the_core() {
     );
     assert!(ok && shown.contains("ajouté-sur-B"), "{shown}");
 }
+
+#[test]
+fn a_key_file_generated_by_the_core_is_accepted_by_keepassxc() {
+    let Some(cli) = keepassxc_cli() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let keyfile_path = dir.path().join("cle.keyx");
+    ligrivsstore_core::keyfile::create(&keyfile_path).unwrap();
+    let keyfile_bytes = std::fs::read(&keyfile_path).unwrap();
+    let path = dir.path().join("coffre.kdbx");
+    let full_key = key().with_keyfile(&keyfile_bytes).unwrap();
+    let mut local = LocalVault::create(&path, "Coffre", full_key, fast_kdf()).unwrap();
+    local
+        .vault_mut()
+        .add_entry(&entry("Banque", "secret-de-test"))
+        .unwrap();
+    local.save().unwrap();
+
+    // KeePassXC vérifie la somme de contrôle du fichier clé avant de l'utiliser.
+    let file = path.to_str().unwrap();
+    let k = keyfile_path.to_str().unwrap();
+    let (ok, listing) = xc(&cli, &["ls", "-q", "-k", k, file], &format!("{PASSWORD}\n"));
+    assert!(ok && listing.contains("Banque"), "{listing}");
+}
+
+#[test]
+fn a_key_file_generated_by_keepassxc_is_read_by_the_core() {
+    let Some(cli) = keepassxc_cli() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let keyfile_path = dir.path().join("keepassxc.keyx");
+    let path = dir.path().join("keepassxc.kdbx");
+
+    // keepassxc-cli crée le fichier clé (XML 2.0) puisqu'il n'existe pas.
+    let (ok, out) = xc(
+        &cli,
+        &[
+            "db-create",
+            "-q",
+            "--set-key-file",
+            keyfile_path.to_str().unwrap(),
+            "-p",
+            "-t",
+            "100",
+            path.to_str().unwrap(),
+        ],
+        &format!("{PASSWORD}\n{PASSWORD}\n"),
+    );
+    assert!(ok, "{out}");
+    let keyfile_bytes = std::fs::read(&keyfile_path).unwrap();
+    let text = String::from_utf8_lossy(&keyfile_bytes);
+    assert!(text.contains("<Version>2.0</Version>"), "{text}");
+    ligrivsstore_core::keyfile::verify_checksum(&keyfile_bytes).unwrap();
+
+    let full_key = VaultKey::new()
+        .with_password(PASSWORD)
+        .with_keyfile(&keyfile_bytes)
+        .unwrap();
+    LocalVault::open(&path, full_key, OpenLimits::default()).unwrap();
+}
