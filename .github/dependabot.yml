@@ -1,0 +1,14 @@
+# Propositions hebdomadaires de mises à jour. Chaque proposition passe par
+# l'intégration continue et une relecture ; la bibliothèque KDBX (keepass),
+# épinglée, n'est mise à jour qu'après lecture de son journal des changements.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

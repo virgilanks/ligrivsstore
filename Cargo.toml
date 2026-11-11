@@ -1,0 +1,67 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/cli"]
+# Le dossier fuzz/ est un espace de travail à part (cargo-fuzz, chaîne nightly).
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# Minimum imposé par la bibliothèque keepass 0.17.0 ; la chaîne utilisée est
+# fixée dans rust-toolchain.toml.
+rust-version = "1.89"
+license-file = "LICENSE"
+publish = false
+authors = ["ligrivs"]
+repository = "https://github.com/virgilanks/ligrivsstore"
+
+[workspace.dependencies]
+ligrivsstore-core = { path = "crates/core", version = "0.1.0" }
+# Lecture et écriture KDBX. Version épinglée : toute mise à jour se fait par une
+# demande de fusion dédiée, après relecture du changelog et passage de la suite
+# d'interopérabilité (voir docs/decisions/0002-noyau-rust.md).
+keepass = { version = "=0.17.0", default-features = false, features = ["save_kdbx4", "_merge"] }
+# Même version que celle utilisée par keepass (type argon2::Version partagé).
+rust-argon2 = "3.0.0"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+uuid = { version = "1.29.2", features = ["v4"] }
+thiserror = "2.0.21"
+zeroize = "1.9.1"
+getrandom = "0.4.3"
+sha2 = "0.11.1"
+hex = "0.4.3"
+base64 = "0.23.1"
+url = "2.5.8"
+# Client HTTP minimal : TLS par rustls, sans décompression (inutile pour des
+# fichiers chiffrés, et source de risques).
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+tempfile = "3.27.0"
+proptest = "1.12.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+# Argon2 est très lent sans optimisation : les dépendances sont optimisées même
+# en mode développement, pour que les tests restent rapides.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+overflow-checks = true

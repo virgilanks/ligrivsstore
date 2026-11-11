@@ -1,0 +1,107 @@
+# Intégration continue : chaque demande de fusion doit passer ces quatre travaux.
+# Les actions tierces sont épinglées par empreinte de commit (et non par
+# étiquette), pour qu'une étiquette déplacée ne puisse pas changer le code exécuté.
+name: Intégration continue
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  verifications:
+    name: Format, analyse et tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Chaîne Rust épinglée (rust-toolchain.toml)
+        run: rustup toolchain install || rustup show
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Analyse statique (clippy)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+
+  windows:
+    name: Tests sous Windows
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Chaîne Rust épinglée (rust-toolchain.toml)
+        run: rustup toolchain install || rustup show
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Tests
+        run: cargo test --workspace --locked
+
+  interoperabilite:
+    name: KeePassXC et serveur « coffre » (banc Apache derrière un relais HTTPS)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Outils de test (KeePassXC, Apache, openssl, BusyBox)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends keepassxc apache2 apache2-utils curl openssl busybox
+      - name: Chaîne Rust épinglée (rust-toolchain.toml)
+        run: rustup toolchain install || rustup show
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Compilation
+        run: cargo build --workspace --locked
+      - name: Démarrage du banc WebDAV (configuration du serveur « coffre », relais HTTPS)
+        run: sudo scripts/banc-webdav.sh demarrer
+      - name: Tests du serveur « coffre » par le relais HTTPS
+        run: sudo scripts/tests-serveur.sh
+      - name: Interopérabilité KeePassXC et synchronisation réelle
+        run: |
+          set -a; . /tmp/lgs-banc-webdav/env; set +a
+          LGS_REQUIRE_KEEPASSXC=1 LGS_REQUIRE_WEBDAV=1 \
+            cargo test -p ligrivsstore-core --locked --test interop_keepassxc --test webdav
+      - name: Scénario de recette de bout en bout
+        run: |
+          set -a; . /tmp/lgs-banc-webdav/env; set +a
+          scripts/scenario-synchro.sh
+      - name: Journaux du banc
+        if: failure()
+        run: sudo cat /tmp/lgs-banc-webdav/run/error.log /tmp/lgs-banc-webdav/run/relais-error.log /tmp/lgs-banc-webdav/run/access.log || true
+      - name: Arrêt du banc
+        if: always()
+        run: sudo scripts/banc-webdav.sh arreter
+
+  dependances:
+    name: Licences et vulnérabilités connues (cargo-deny)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Chaîne Rust épinglée (rust-toolchain.toml)
+        run: rustup toolchain install || rustup show
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Installation de cargo-deny
+        run: cargo install --locked cargo-deny@0.20.2
+      - name: Contrôle
+        run: cargo deny --log-level error check
