@@ -6,14 +6,14 @@ Le noyau `ligrivsstore-core` regroupe tout ce qui touche aux secrets. Les applic
 
 | Module | Rôle |
 |---|---|
-| `vault` | Coffre KDBX 4 : création, ouverture, enregistrement en KDBX 4.1, entrées (titre, adresse, identifiant, mot de passe, notes), historique, suppression suivie, fusion |
+| `vault` | Coffre KDBX 4 : création, ouverture, enregistrement en KDBX 4.1, entrées (titre, adresse, identifiant, mot de passe, notes), historique, suppression suivie, fusion, entrées réservées (attribut `ligrivsstore-role`), restauration des entrées d'une sauvegarde |
 | `header` | Lecture stricte de l'en-tête sans la clé ; plafonds de dérivation vérifiés **avant** tout calcul |
 | `kdf` | Politique de dérivation (Argon2id), calibrage, normalisation à l'enregistrement |
 | `keyfile` | Fichiers clés : création au format XML 2.0 de KeePass, lecture, contrôle de la somme de contrôle |
 | `storage` | Écriture atomique, relecture de contrôle, sauvegardes locales tournantes |
 | `local` | Coffre local d'un terminal (`LocalVault`) et boucle de synchronisation |
 | `sync` | Client WebDAV (`WebDavTransport`), état de synchronisation, trait `Transport` |
-| `generator` | Mots de passe aléatoires (générateur du système, tirage sans biais) |
+| `generator` | Mots de passe et phrases de passe (liste longue de l'EFF) aléatoires (générateur du système, tirage sans biais) |
 | `error` | Erreurs en français ; une variante par cas, pour que chaque application affiche son propre texte |
 
 La lecture et l'écriture du format reposent sur la bibliothèque `keepass` 0.17.0 (licence MIT), épinglée et encadrée (voir les décisions 0002 et 0006).
@@ -88,17 +88,20 @@ Garanties vérifiées par les tests :
 | Fichiers locaux | Écriture atomique et relecture avant tout envoi ; dix sauvegardes ; droits restreints. Sous Windows, si un autre programme tient le fichier (antivirus, OneDrive, indexation), le remplacement est retenté pendant près de 2 secondes |
 | Fichiers clés | Créés au format XML 2.0 de KeePass (32 octets aléatoires et somme de contrôle) ; un fichier XML 2.0 endommagé est signalé comme tel ; les autres fichiers restent acceptés selon les règles de KeePass (décision 0009) |
 | Chaîne logicielle | Dépendances épinglées (`Cargo.lock`, `package-lock.json`) ; licences et vulnérabilités connues contrôlées par `cargo-deny` et `npm audit` ; actions GitHub épinglées par empreinte ; mises à jour proposées chaque semaine |
-| Interface de l'application | Liste fermée de commandes, permissions de Tauri, motif d'isolation, politique de contenu stricte (décision 0010) ; le coffre déverrouillé et sa clé restent dans le processus Rust |
+| Interface de l'application | Liste fermée de commandes, permissions de Tauri, motif d'isolation, politique de contenu stricte (décision 0010) ; le coffre déverrouillé et sa clé restent dans le processus Rust ; l'entrée réservée est refusée aux commandes ordinaires |
+| Verrouillage | Inactivité, session Windows, mise en veille, fermeture ; la clé est alors effacée de la mémoire (décision 0011) |
+| Presse-papiers | Copie par le cœur, hors de l'historique (Windows + V) et du presse-papiers cloud ; effacée après 30 secondes si elle n'a pas été remplacée |
+| Code `unsafe` | Interdit partout, sauf dans le module `systeme_windows` du paquet `ligrivsstore-win` : appels à Windows, un par bloc, chacun justifié ; clippy sous Windows dans l'intégration continue |
 
 ## Application Windows (jalon 1)
 
 ```text
 apps/windows/src        Svelte 5 : écrans et formulaires ; ne conserve aucun secret
-      │  14 commandes → cadre d'isolation (même liste) → message chiffré → permissions de Tauri
-apps/windows/src-tauri  Tauri 2 : relaie chaque commande vers la session, dans une tâche à part
-      │
-crates/app              ligrivsstore-app : session, réglages, messages, erreurs, robustesse
-      │
+      │  26 commandes → cadre d'isolation (même liste) → message chiffré → permissions de Tauri
+apps/windows/src-tauri  Tauri 2 : relaie chaque commande vers la session, dans une tâche à part ;
+      │                 fil « pilote » : interroge l'Autopilot chaque seconde et exécute ses demandes
+crates/app              ligrivsstore-app : session, pilote, état observable, réglages, messages, erreurs
+      │        └──────► crates/win (ligrivsstore-win) : session Windows, mise en veille, presse-papiers
 crates/core             ligrivsstore-core : LocalVault (coffre, dérivation, stockage, synchronisation)
 ```
 
@@ -108,13 +111,33 @@ crates/core             ligrivsstore-core : LocalVault (coffre, dérivation, sto
 | `create_vault`, `open_vault`, `lock_vault`, `forget_vault` | Cycle de vie du coffre |
 | `list_entries`, `get_entry`, `reveal_password` | Liste filtrée, fiche sans mot de passe, mot de passe sur demande |
 | `save_entry`, `delete_entry`, `retry_save` | Chaque modification est enregistrée aussitôt (écriture atomique, relue) ; en cas d'échec, l'application le signale et propose de réessayer |
-| `generate_password`, `passphrase_strength` | Générateur ; robustesse d'une phrase de passe (zxcvbn) |
+| `copy_field` | Copie d'un identifiant ou d'un mot de passe par le cœur, hors de l'historique du presse-papiers et du cloud, effacée après le délai réglé |
+| `install_from_server` | Installation, sur un nouveau PC, du coffre présent sur le serveur |
+| `get_sync_settings`, `configure_sync`, `sync_now` | Réglage de la synchronisation (rangé dans l'entrée réservée du coffre) ; échange immédiat |
+| `activity`, `ping_activity` | État observable (verrouillage, synchronisation), relu toutes les 2 secondes sans attendre la session ; activité de l'utilisateur |
+| `list_backups`, `restore_backup` | Les 10 sauvegardes locales ; restauration de leurs entrées |
+| `get_preferences`, `save_preferences` | Délai de verrouillage (1 à 60 minutes) et d'effacement du presse-papiers (10 à 120 secondes) |
+| `generate_password`, `generate_passphrase`, `passphrase_strength` | Générateurs ; robustesse d'une phrase de passe (zxcvbn) |
+
+Le pilote (`Autopilot`) décide du moment des échanges et des verrouillages, sans fil ni horloge propres (décision 0011) :
+
+| Événement | Effet |
+|---|---|
+| Ouverture du coffre | Synchronisation immédiate |
+| Modification | Synchronisation 10 secondes après la dernière |
+| Toutes les 15 minutes, ou à la demande | Synchronisation |
+| Serveur injoignable | Nouvel essai après 2, 5, puis 15 minutes |
+| Identifiants refusés | Plus aucun essai avant une nouvelle saisie (CrowdSec) |
+| Inactivité dans l'application (5 minutes par défaut) | Verrouillage |
+| Session Windows verrouillée, fermée ou déconnectée ; mise en veille (annoncée, ou constatée au réveil) | Verrouillage |
+| Délai d'effacement atteint, presse-papiers inchangé | Presse-papiers vidé |
 
 Fichiers sur le PC (emplacements proposés par défaut) :
 
 - coffre : `Documents\ligrivsstore\coffre.kdbx`, avec ses sauvegardes et son état de synchronisation ;
 - fichier clé : `%LOCALAPPDATA%\ligrivsstore-cles\coffre.keyx`, hors de OneDrive, donc jamais à côté du coffre sur un serveur, et hors du dossier de l'application, que la désinstallation peut effacer ;
-- réglages : `%APPDATA%\com.ligrivs.ligrivsstore\reglages.json`, qui ne retient que l'emplacement du dernier coffre et celui de son fichier clé.
+- réglages : `%APPDATA%\com.ligrivs.ligrivsstore\reglages.json`, qui ne retient que l'emplacement du dernier coffre, celui de son fichier clé et les deux délais ;
+- identifiants du serveur : dans le coffre lui-même (entrée réservée), jamais ailleurs.
 
 Le cloisonnement de l'interface, la création d'un coffre et les licences sont décrits dans la décision 0010.
 

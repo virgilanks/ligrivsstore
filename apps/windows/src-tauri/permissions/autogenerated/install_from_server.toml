@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-install-from-server"
+description = "Enables the install_from_server command without any pre-configured scope."
+commands.allow = ["install_from_server"]
+
+[[permission]]
+identifier = "deny-install-from-server"
+description = "Denies the install_from_server command without any pre-configured scope."
+commands.deny = ["install_from_server"]

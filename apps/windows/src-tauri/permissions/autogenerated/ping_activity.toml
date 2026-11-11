@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ping-activity"
+description = "Enables the ping_activity command without any pre-configured scope."
+commands.allow = ["ping_activity"]
+
+[[permission]]
+identifier = "deny-ping-activity"
+description = "Denies the ping_activity command without any pre-configured scope."
+commands.deny = ["ping_activity"]

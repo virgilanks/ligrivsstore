@@ -145,6 +145,10 @@ jobs:
           set -a; . /tmp/lgs-banc-webdav/env; set +a
           LGS_REQUIRE_KEEPASSXC=1 LGS_REQUIRE_WEBDAV=1 \
             cargo test -p ligrivsstore-core --locked --test interop_keepassxc --test webdav
+      - name: Deux postes synchronisés par le serveur (logique de l'application)
+        run: |
+          set -a; . /tmp/lgs-banc-webdav/env; set +a
+          LGS_REQUIRE_WEBDAV=1 cargo test -p ligrivsstore-app --locked --test deux_postes
       - name: Scénario de recette de bout en bout
         run: |
           set -a; . /tmp/lgs-banc-webdav/env; set +a

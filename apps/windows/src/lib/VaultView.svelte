@@ -1,19 +1,26 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, messageOf } from "./api";
+  import BackupsPanel from "./BackupsPanel.svelte";
   import EntryDetail from "./EntryDetail.svelte";
   import EntryEditor from "./EntryEditor.svelte";
-  import type { EntryRow, EntryView, Status } from "./types";
+  import SettingsPanel from "./SettingsPanel.svelte";
+  import SyncBadge from "./SyncBadge.svelte";
+  import SyncPanel from "./SyncPanel.svelte";
+  import type { Activity, EntryRow, EntryView, Status } from "./types";
 
   interface Props {
     status: Status;
+    activity: Activity | null;
     onLocked: (status: Status) => void;
     onStatus: (status: Status) => void;
   }
-  let { status, onLocked, onStatus }: Props = $props();
+  let { status, activity, onLocked, onStatus }: Props = $props();
 
+  type Tab = "entrees" | "synchronisation" | "sauvegardes" | "reglages";
   type Mode = "vide" | "fiche" | "modification" | "creation";
 
+  let tab = $state<Tab>("entrees");
   let query = $state("");
   let rows = $state<EntryRow[]>([]);
   let selected = $state<EntryView | null>(null);
@@ -80,6 +87,28 @@
     return () => clearTimeout(timer);
   });
 
+  // Contenu changé hors de l'interface (synchronisation, restauration) :
+  // la liste et la fiche affichée sont relues, sauf pendant une saisie.
+  let seenRevision: number | null = null;
+  $effect(() => {
+    const revision = activity?.revision ?? null;
+    if (revision === null) return;
+    if (seenRevision !== null && revision !== seenRevision) {
+      void refresh();
+      if (mode === "fiche" && selected) {
+        const id = selected.id;
+        api
+          .getEntry(id)
+          .then((view) => (selected = view))
+          .catch(() => {
+            selected = null;
+            mode = "vide";
+          });
+      }
+    }
+    seenRevision = revision;
+  });
+
   onMount(refresh);
 </script>
 
@@ -92,18 +121,32 @@
       </p>
     </div>
     <div class="actions">
-      <button
-        type="button"
-        class="primary"
-        onclick={() => {
-          selected = null;
-          mode = "creation";
-          newForm += 1;
-        }}>Nouvelle entrée</button
-      >
-      <button type="button" onclick={lock} disabled={locking}>Verrouiller</button>
+      {#if activity}
+        <SyncBadge sync={activity.sync} onOpen={() => (tab = "synchronisation")} />
+      {/if}
+      {#if tab === "entrees"}
+        <button
+          type="button"
+          class="primary"
+          onclick={() => {
+            selected = null;
+            mode = "creation";
+            newForm += 1;
+          }}>Nouvelle entrée</button
+        >
+      {/if}
+      <button type="button" onclick={lock} disabled={locking}>
+        {locking ? "Verrouillage…" : "Verrouiller"}
+      </button>
     </div>
   </header>
+
+  <nav class="tabs" aria-label="Sections du coffre">
+    <button type="button" class:current={tab === "entrees"} aria-current={tab === "entrees" ? "page" : undefined} onclick={() => (tab = "entrees")}>Entrées</button>
+    <button type="button" class:current={tab === "synchronisation"} aria-current={tab === "synchronisation" ? "page" : undefined} onclick={() => (tab = "synchronisation")}>Synchronisation</button>
+    <button type="button" class:current={tab === "sauvegardes"} aria-current={tab === "sauvegardes" ? "page" : undefined} onclick={() => (tab = "sauvegardes")}>Sauvegardes</button>
+    <button type="button" class:current={tab === "reglages"} aria-current={tab === "reglages" ? "page" : undefined} onclick={() => (tab = "reglages")}>Réglages</button>
+  </nav>
 
   {#if status.unsaved}
     <div class="banner" role="alert">
@@ -113,38 +156,50 @@
   {/if}
   {#if failure}<p class="error" role="alert">{failure}</p>{/if}
 
-  <div class="columns">
-    <nav class="list" aria-label="Entrées du coffre">
-      <input type="search" placeholder="Rechercher" aria-label="Rechercher une entrée" bind:value={query} spellcheck="false" />
-      {#if rows.length === 0}
-        <p class="muted small">{query ? "Aucune entrée ne correspond." : "Aucune entrée pour l'instant."}</p>
-      {:else}
-        <ul>
-          {#each rows as row (row.id)}
-            <li>
-              <button type="button" class:current={selected?.id === row.id} onclick={() => select(row.id)}>
-                <span class="title">{row.title}</span>
-                <span class="sub">{row.username || row.url || " "}</span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </nav>
+  {#if tab === "entrees"}
+    <div class="columns">
+      <nav class="list" aria-label="Entrées du coffre">
+        <input type="search" placeholder="Rechercher" aria-label="Rechercher une entrée" bind:value={query} spellcheck="false" />
+        {#if rows.length === 0}
+          <p class="muted small">{query ? "Aucune entrée ne correspond." : "Aucune entrée pour l'instant."}</p>
+        {:else}
+          <ul>
+            {#each rows as row (row.id)}
+              <li>
+                <button type="button" class:current={selected?.id === row.id} onclick={() => select(row.id)}>
+                  <span class="title">{row.title}</span>
+                  <span class="sub">{row.username || row.url || " "}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </nav>
 
-    <section class="pane">
-      {#if mode === "creation"}
-        <!-- Un nouveau clic sur « Nouvelle entrée » repart d'un formulaire vide. -->
-        {#key newForm}
-          <EntryEditor entry={null} onSaved={saved} onCancel={() => (mode = "vide")} />
-        {/key}
-      {:else if mode === "modification" && selected}
-        <EntryEditor entry={selected} onSaved={saved} onCancel={() => (mode = "fiche")} />
-      {:else if mode === "fiche" && selected}
-        <EntryDetail entry={selected} onEdit={() => (mode = "modification")} onDeleted={deleted} />
+      <section class="pane">
+        {#if mode === "creation"}
+          <!-- Un nouveau clic sur « Nouvelle entrée » repart d'un formulaire vide. -->
+          {#key newForm}
+            <EntryEditor entry={null} onSaved={saved} onCancel={() => (mode = "vide")} />
+          {/key}
+        {:else if mode === "modification" && selected}
+          <EntryEditor entry={selected} onSaved={saved} onCancel={() => (mode = "fiche")} />
+        {:else if mode === "fiche" && selected}
+          <EntryDetail entry={selected} onEdit={() => (mode = "modification")} onDeleted={deleted} />
+        {:else}
+          <p class="muted centered">Choisissez une entrée, ou créez-en une.</p>
+        {/if}
+      </section>
+    </div>
+  {:else}
+    <section class="pane single">
+      {#if tab === "synchronisation"}
+        <SyncPanel sync={activity?.sync ?? null} />
+      {:else if tab === "sauvegardes"}
+        <BackupsPanel onRestored={refresh} />
       {:else}
-        <p class="muted centered">Choisissez une entrée, ou créez-en une.</p>
+        <SettingsPanel />
       {/if}
     </section>
-  </div>
+  {/if}
 </div>

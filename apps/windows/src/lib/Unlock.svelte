@@ -7,10 +7,12 @@
   interface Props {
     path: string;
     keyfilePath: string | null;
+    /** Motif du dernier verrouillage automatique. */
+    lockMessage: string | null;
     onUnlocked: (status: Status) => void;
     onChangeVault: () => void;
   }
-  let { path, keyfilePath, onUnlocked, onChangeVault }: Props = $props();
+  let { path, keyfilePath, lockMessage, onUnlocked, onChangeVault }: Props = $props();
 
   let passphrase = $state("");
   let keyfile = $state("");
@@ -52,6 +54,7 @@
 <section class="panel narrow">
   <h1>Déverrouiller le coffre</h1>
   <p class="path" title={path}>{path}</p>
+  {#if lockMessage}<p class="note small" role="status">{lockMessage}</p>{/if}
   <form onsubmit={unlock}>
     <label for="phrase">Phrase de passe</label>
     <input id="phrase" type="password" autocomplete="off" bind:value={passphrase} disabled={busy} {@attach focusOnMount} />

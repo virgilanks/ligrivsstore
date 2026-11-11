@@ -41,7 +41,7 @@ pub use error::{Error, Result};
 pub use header::OpenLimits;
 pub use kdf::KdfParams;
 pub use local::LocalVault;
-pub use sync::{SyncOptions, SyncReport, Transport, WebDavTransport};
+pub use sync::{SyncError, SyncOptions, SyncReport, Transport, TransportOptions, WebDavTransport};
 pub use vault::{
     EntryDetails, EntryInput, EntrySummary, MergeReport, ROLE_FIELD, RestoreReport, SYNC_ROLE,
     Vault, VaultKey,

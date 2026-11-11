@@ -945,7 +945,9 @@ checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 name = "ligrivsstore-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "ligrivsstore-core",
+ "ligrivsstore-win",
  "serde",
  "serde_json",
  "tempfile",

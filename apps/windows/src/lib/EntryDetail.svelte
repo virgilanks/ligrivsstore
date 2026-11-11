@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, messageOf } from "./api";
-  import type { EntryView } from "./types";
+  import { formatDate } from "./format";
+  import type { CopyField, EntryView } from "./types";
 
   interface Props {
     entry: EntryView;
@@ -13,6 +14,8 @@
   let confirmDelete = $state(false);
   let busy = $state(false);
   let failure = $state<string | null>(null);
+  let copied = $state<string | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Nouvelle fiche : le mot de passe affiché pour la précédente est oublié.
   $effect(() => {
@@ -20,7 +23,22 @@
     revealed = null;
     confirmDelete = false;
     failure = null;
+    copied = null;
   });
+
+  $effect(() => () => clearTimeout(copiedTimer));
+
+  async function copy(field: CopyField) {
+    failure = null;
+    try {
+      const seconds = await api.copyField(entry.id, field);
+      copied = `${field === "password" ? "Mot de passe" : "Identifiant"} copié : effacé du presse-papiers dans ${seconds} s.`;
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => (copied = null), seconds * 1000);
+    } catch (error) {
+      failure = messageOf(error);
+    }
+  }
 
   async function toggleReveal() {
     if (revealed !== null) {
@@ -46,13 +64,6 @@
     }
   }
 
-  function formatDate(iso: string | null): string {
-    if (!iso) return "—";
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime())
-      ? iso
-      : date.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
-  }
 </script>
 
 <article class="detail">
@@ -61,7 +72,14 @@
     <dt>Adresse</dt>
     <dd>{entry.url || "—"}</dd>
     <dt>Identifiant</dt>
-    <dd><span class="selectable">{entry.username || "—"}</span></dd>
+    <dd>
+      <span class="row">
+        <span class="selectable">{entry.username || "—"}</span>
+        {#if entry.username}
+          <button type="button" class="small-button" onclick={() => copy("username")}>Copier</button>
+        {/if}
+      </span>
+    </dd>
     <dt>Mot de passe</dt>
     <dd>
       {#if !entry.hasPassword}
@@ -76,6 +94,7 @@
           <button type="button" class="small-button" onclick={toggleReveal}>
             {revealed !== null ? "Masquer" : "Afficher"}
           </button>
+          <button type="button" class="small-button" onclick={() => copy("password")}>Copier</button>
         </span>
       {/if}
     </dd>
@@ -88,6 +107,7 @@
   </dl>
 
   {#if failure}<p class="error" role="alert">{failure}</p>{/if}
+  {#if copied}<p class="note small" role="status">{copied}</p>{/if}
 
   <div class="actions">
     {#if confirmDelete}

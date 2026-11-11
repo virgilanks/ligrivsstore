@@ -23,9 +23,10 @@ pub const PROTECTION_FORMATS: [(&str, u32); 3] = [
     ("CanUploadToCloudClipboard", 0),
 ];
 
-/// Repère d'une copie : numéro de séquence du presse-papiers juste après.
+/// Repère d'une copie : numéro de séquence du presse-papiers de Windows
+/// juste après (`GetClipboardSequenceNumber`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CopyToken(u32);
+pub struct CopyToken(pub u32);
 
 /// Copie `text` dans le presse-papiers, hors de l'historique et du cloud.
 pub fn copy_protected(text: &str) -> Result<CopyToken, WinError> {
