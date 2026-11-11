@@ -15,6 +15,7 @@ Livrable vérifiable : **un installateur qui crée, ouvre et modifie un coffre.*
 | Coquille Tauri : `cargo fmt`, `cargo clippy -D warnings` | Aucune remarque |
 | `cargo deny` : dépôt, puis application Windows (paquets de Windows) | Conformes, avec les cinq exceptions MPL-2.0 de la décision 0010 |
 | `npm audit` | Aucune vulnérabilité dans les paquets livrés ; 2 de faible gravité dans les outils de construction (deepmerge, par vite-plugin-svelte) |
+| Intégration continue sur GitHub (Rust 1.99.1) : Linux, Windows avec KeePassXC 2.8.0, banc Apache, cargo-deny, application Windows | Verte : 115 tests sous Linux, 116 sous Windows (1 ignoré) ; installateur `ligrivsstore_0.1.0_x64-setup.exe` (2,55 Mio) produit en 12 minutes |
 
 ### 2. Essai de l'application compilée
 
