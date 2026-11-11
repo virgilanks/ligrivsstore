@@ -63,7 +63,12 @@ impl VaultKey {
 
     /// Ajoute le contenu du fichier clé (formats XML de KeePass, 32 octets,
     /// 64 caractères hexadécimaux, ou tout autre fichier, alors haché).
+    ///
+    /// Un fichier XML 2.0 dont la somme de contrôle ne correspond pas est
+    /// refusé ([`Error::KeyFileCorrupt`](crate::Error::KeyFileCorrupt)), comme
+    /// dans KeePassXC.
     pub fn with_keyfile(self, keyfile: &[u8]) -> Result<Self> {
+        crate::keyfile::verify_checksum(keyfile)?;
         let mut reader = keyfile;
         Ok(Self {
             inner: self.inner.with_keyfile(&mut reader)?,

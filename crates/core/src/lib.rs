@@ -8,6 +8,7 @@
 //! - [`header`] : lecture de l'en-tête sans la clé et plafonds appliqués **avant**
 //!   toute dérivation de clé ;
 //! - [`kdf`] : politique de dérivation (Argon2id) et calibrage ;
+//! - [`keyfile`] : fichiers clés au format XML 2.0 de KeePass ;
 //! - [`storage`] : écriture atomique, relecture de contrôle, sauvegardes locales ;
 //! - [`local`] : coffre local d'un terminal et boucle de synchronisation ;
 //! - [`sync`] : échanges avec le serveur « coffre » (WebDAV, envoi conditionnel) ;
@@ -30,6 +31,7 @@ pub mod error;
 pub mod generator;
 pub mod header;
 pub mod kdf;
+pub mod keyfile;
 pub mod local;
 pub mod storage;
 pub mod sync;

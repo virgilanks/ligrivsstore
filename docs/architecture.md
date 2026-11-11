@@ -9,6 +9,7 @@ Le noyau `ligrivsstore-core` regroupe tout ce qui touche aux secrets. Les applic
 | `vault` | Coffre KDBX 4 : création, ouverture, enregistrement en KDBX 4.1, entrées (titre, adresse, identifiant, mot de passe, notes), historique, suppression suivie, fusion |
 | `header` | Lecture stricte de l'en-tête sans la clé ; plafonds de dérivation vérifiés **avant** tout calcul |
 | `kdf` | Politique de dérivation (Argon2id), calibrage, normalisation à l'enregistrement |
+| `keyfile` | Fichiers clés : création au format XML 2.0 de KeePass, lecture, contrôle de la somme de contrôle |
 | `storage` | Écriture atomique, relecture de contrôle, sauvegardes locales tournantes |
 | `local` | Coffre local d'un terminal (`LocalVault`) et boucle de synchronisation |
 | `sync` | Client WebDAV (`WebDavTransport`), état de synchronisation, trait `Transport` |
@@ -84,7 +85,8 @@ Garanties vérifiées par les tests :
 | Bordure | Cloudflare termine le chiffrement HTTPS : il voit le mot de passe WebDAV et les fichiers, chiffrés et authentifiés par KDBX. Le mot de passe WebDAV est distinct de la phrase de passe du coffre et renouvelable |
 | Refus d'identifiants | Synchronisation suspendue après un 401, jusqu'à une nouvelle saisie (CrowdSec) |
 | Mémoire | Clé du coffre, mots de passe saisis et générés, identifiants WebDAV : effacés à la destruction (`zeroize`) ; affichage masqué dans les journaux de débogage |
-| Fichiers locaux | Écriture atomique et relecture avant tout envoi ; dix sauvegardes ; droits restreints |
+| Fichiers locaux | Écriture atomique et relecture avant tout envoi ; dix sauvegardes ; droits restreints. Sous Windows, si un autre programme tient le fichier (antivirus, OneDrive, indexation), le remplacement est retenté pendant près de 2 secondes |
+| Fichiers clés | Créés au format XML 2.0 de KeePass (32 octets aléatoires et somme de contrôle) ; un fichier XML 2.0 endommagé est signalé comme tel ; les autres fichiers restent acceptés selon les règles de KeePass (décision 0009) |
 | Chaîne logicielle | Dépendances épinglées (`Cargo.lock`) ; licences et vulnérabilités connues contrôlées par `cargo-deny` ; actions GitHub épinglées par empreinte ; mises à jour proposées chaque semaine |
 
 ## Intégration dans les applications

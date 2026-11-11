@@ -60,6 +60,19 @@ pub enum Error {
     #[error("le fichier existe déjà : {0}")]
     AlreadyExists(String),
 
+    /// Aucun coffre à l'emplacement indiqué.
+    #[error("coffre introuvable : {0}")]
+    VaultNotFound(String),
+
+    /// Aucun fichier clé à l'emplacement indiqué.
+    #[error("fichier clé introuvable : {0}")]
+    KeyFileNotFound(String),
+
+    /// Fichier clé XML 2.0 dont la somme de contrôle ne correspond pas : il a
+    /// été modifié ou endommagé.
+    #[error("fichier clé endommagé : sa somme de contrôle ne correspond pas à son contenu")]
+    KeyFileCorrupt,
+
     /// Erreur d'entrée-sortie du système de fichiers.
     #[error("erreur d'entrée-sortie : {0}")]
     Io(#[from] std::io::Error),

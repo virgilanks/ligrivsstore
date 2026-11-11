@@ -67,3 +67,5 @@ Points relevés pendant la recette, à reprendre au jalon 1 :
 - Un fichier introuvable donne `erreur d'entrée-sortie : Le fichier spécifié est introuvable. (os error 2)`, sans dire s'il s'agit du coffre ou du fichier clé. Le message doit nommer le fichier.
 - `lgs list` n'affiche rien pour un coffre sans entrée. Un message explicite éviterait le doute.
 - La fusion d'une copie modifiée par KeePassDX ou KeePassXC compte aussi `1 mise(s) à jour` : ces applications modifient les dates du groupe racine. C'est sans conséquence.
+
+Les deux premiers points sont corrigés par la demande de fusion n° 2 (branche `jalon-1/corrections-recette`).
