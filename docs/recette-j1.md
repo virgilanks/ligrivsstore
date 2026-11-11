@@ -59,3 +59,11 @@ Sur votre PC Windows, sans PowerShell. Utilisez une phrase de passe neuve, propr
 En cas d'écart, une capture d'écran et le numéro de l'étape suffisent.
 
 Ce que la semaine 1 ne contient pas encore : la synchronisation, le verrouillage automatique et le presse-papiers protégé (semaine 2), les phrases de passe générées (semaine 2), l'extension et le remplissage (semaines 3 à 5).
+
+### 4. Résultats de la recette par Hermann (11 novembre 2026)
+
+Les dix étapes, S1-1 à S1-10, sont réussies sur le PC Windows d'Hermann. L'installateur utilisé est celui produit par l'intégration continue de la demande de fusion n° 3. Aucun écart n'a été signalé.
+
+L'étape S1-10 confirme que le coffre et le fichier clé survivent à une désinstallation qui supprime les données de l'application.
+
+**Critère de sortie de la semaine 1 atteint** : l'installateur crée, ouvre et modifie un coffre. La semaine 1 peut être fusionnée.
