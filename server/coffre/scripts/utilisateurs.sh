@@ -47,7 +47,11 @@ ecrire_bloc() {
     cat > "$tmp" <<EOF
 # Généré par scripts/utilisateurs.sh — compte « $1 »
 <Directory "$RACINE/dav/$1">
-    Require user $1
+    # Pas de sous-dossier : l'historique ne suit que les coffres à la racine du dossier
+    <RequireAll>
+        Require user $1
+        Require not method MKCOL
+    </RequireAll>
 </Directory>
 <Directory "$RACINE/versions/$1">
     <RequireAll>

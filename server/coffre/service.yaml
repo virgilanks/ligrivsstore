@@ -1,5 +1,7 @@
 # ==========================================================================
 # Fiche de déploiement — service « coffre » (modèle 1, 10 novembre 2026)
+# Revue infra du 11 novembre 2026 : valeurs attribuées et corrections intégrées
+# (ServerName en https, dossier auth/ monté, IPv4, httpd 2.4.70, pas de sous-dossier).
 # Sous-projet KEEPASS : synchronisation des coffres (format KDBX) de notre application.
 # Pièces jointes : compose.yaml, .env.example, config/httpd.conf,
 # config/healthz.txt, scripts/utilisateurs.sh, scripts/historique.sh,
@@ -43,11 +45,12 @@ hebergement:
     memoire_go: 2
     disque_go: 20
     justification: "Criticité haute : isoler les coffres d'une compromission d'un autre service d'apps01 (WordPress de ligrivs). Charge très faible. Docker et Compose comme sur apps01 ; dossier /opt/sites/coffre ; nom de VM proposé : coffre01."
-  port: a_attribuer             # 8080 à 8099, depuis edge01 seulement
+    attribue: "VM 131 coffre01, 10.10.30.11 ; filtre local : seuls edge01 et mon01 joignent le port (apps01 partage le VLAN 30)"
+  port: 8080                    # attribué le 11 novembre 2026 ; depuis edge01 et mon01 seulement
 
 conteneurs:
   - service_compose: webdav
-    image: "httpd:2.4.69-trixie"
+    image: "httpd:2.4.70-trixie"
     role: "serveur WebDAV (Apache) : /dav/<utilisateur>/ en lecture-écriture pour son seul propriétaire, /versions/<utilisateur>/ en lecture seule, /healthz public"
     port_interne: 8080
     volumes:
@@ -74,7 +77,7 @@ conteneurs:
 
 base_de_donnees:
   type: aucune                  # fichiers KDBX ; pas de base
-  nom: aucune
+  nom: aucune                   # pas de base
   taille_estimee_go: 0
 
 # Aucune sortie au-delà du DNS, de HTTP/HTTPS et de l'heure ; le conteneur
@@ -104,7 +107,7 @@ exploitation:
   sauvegarde: "VM entière chaque nuit (par défaut). En plus, dans la VM : historique de chaque coffre (copie à chaque modification, passage toutes les 15 minutes, conservation 30 jours, la dernière copie toujours gardée). Chaque terminal garde aussi sa copie locale du coffre."
   rpo_heures: 24                # perte maximale si la VM est perdue ; 15 minutes en cas de coffre écrasé ou corrompu (historique)
   rto_heures: 24                # les applications fonctionnent hors ligne : seule la synchronisation est suspendue
-  mises_a_jour: "Versions épinglées. Veille mensuelle des avis de sécurité d'Apache httpd et de BusyBox. Passer à httpd 2.4.70 dès la publication de son image officielle (dépôt docker-library déjà à jour, catalogue officiel encore en 2.4.69 au 9 novembre 2026). Revue trimestrielle."
+  mises_a_jour: "Versions épinglées. Veille mensuelle des avis de sécurité d'Apache httpd et de BusyBox. httpd 2.4.70 publiée dans le catalogue officiel le 10 novembre 2026 : retenue au déploiement. Revue trimestrielle."
   journaux: "Sortie standard des conteneurs (json-file, rotation). Adresse réelle du client lue dans X-Forwarded-For d'edge01 uniquement. Aucun mot de passe journalisé (vérifié en test)."
 
 recette:                        # chaque test se vérifie par une commande (comptes de test « recette1 » et « recette2 » créés puis supprimés)
