@@ -1,0 +1,22 @@
+[package]
+name = "ligrivsstore-cli"
+description = "lgs : outil de développement et de recette du noyau ligrivsstore"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "lgs"
+path = "src/main.rs"
+
+[dependencies]
+ligrivsstore-core.workspace = true
+clap.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,6 @@
+[toolchain]
+# Dernière version stable au 11 novembre 2026. Mise à jour par une demande de
+# fusion dédiée, pour que l'intégration continue valide la nouvelle chaîne.
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
