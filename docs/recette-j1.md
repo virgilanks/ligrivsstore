@@ -81,8 +81,9 @@ Livrable vérifiable : **deux postes synchronisés par le serveur « coffre »**
 | Pilote (`autopilot`) : verrouillage à l'inactivité, réveil détecté par un saut d'horloge, synchronisation à l'ouverture, 10 s après la dernière modification et toutes les 15 minutes, essais espacés hors ligne, aucun essai après un refus, effacement du presse-papiers | Réussi |
 | Session : entrée réservée cachée et refusée aux commandes ordinaires, serveur injoignable (hors ligne), refus d'identifiants (une seule requête, puis plus rien, même après réouverture), pause d'une minute à l'installation après un refus, sauvegardes, copie, réglages, phrases de passe | Réussi |
 | Noyau : liste de l'EFF (empreinte SHA-256), phrases de passe, entrées réservées à travers enregistrement et fusion, restauration sans perte, sauvegarde d'un autre coffre refusée | Réussi |
-| Sous Windows, dans l'intégration continue : fenêtre cachée qui reçoit verrouillage de session et mise en veille ; presse-papiers protégé (trois formats lus et vérifiés, effacement, copie d'un autre programme respectée) ; clippy sur le code propre à Windows | Réussi (premier passage sur la branche : 126 tests sous Windows) |
+| Sous Windows, dans l'intégration continue : fenêtre cachée qui reçoit verrouillage de session et mise en veille ; presse-papiers protégé (trois formats lus et vérifiés, effacement, copie d'un autre programme respectée) ; clippy sur le code propre à Windows | Réussi |
 | `svelte-check`, `cargo fmt`, `cargo clippy -D warnings` (dépôt et coquille), `cargo deny` (dépôt, application Windows), `npm audit` des paquets livrés | Aucune remarque ; conformes |
+| Intégration continue sur GitHub (Rust 1.99.1), demande n° 5 | Verte : 141 tests sous Linux, 144 sous Windows (KeePassXC 2.8.0) ; essai `deux_postes` contre le banc derrière le relais HTTPS ; installateur produit (archive de 3,4 Mo) |
 
 ### 2. Essai de l'application compilée : deux postes
 
