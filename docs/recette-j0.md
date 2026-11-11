@@ -49,3 +49,19 @@ Contrôles complémentaires :
 | R6 | Sur GitHub, dans la demande de fusion n° 1 : consulter l'onglet *Checks* | Les quatre travaux de l'intégration continue sont verts : vérifications (Linux), Windows, interopérabilité, dépendances |
 
 Critère de sortie du jalon 0 : R1, R2, R3, R5 et R6 réussis.
+
+## 4. Résultats de la recette par Hermann (11 novembre 2026)
+
+| N° | Résultat | Constats |
+|---|---|---|
+| R1 | En attente du bilan | Rust est installé et le dépôt compile sous Windows : l'outil `lgs`, installé avec `cargo install`, a servi pour R2 et R3. Reste à relever le total des tests (80 réussis attendus). |
+| R2 | Réussi | Le coffre créé par `lgs` s'ouvre dans KeePassXC pour Windows, avec le fichier clé. La modification faite dans KeePassXC est relue par `lgs` (`Versions antérieures : 1`). En sens inverse, `lgs` ouvre un coffre et un fichier clé (format XML 2.0) créés par KeePassXC. À l'écriture, il garde les réglages de KeePassXC (64 Mio, 60 itérations, 4 voies) et passe le coffre en Argon2id et KDBX 4.1 |
+| R3 | Réussi | Le coffre s'ouvre avec KeePassDX sur Android, fichier clé compris. L'entrée ajoutée sur le téléphone est fusionnée par `lgs merge` (`1 ajout(s)`), et l'entrée Banque est conservée |
+| R4 | Non fait | Facultatif : pas d'iPhone disponible |
+| R5 | Réussi | 22 vérifications sur 22 contre le serveur en service (`https://coffre.ligrivs.com/dav/recette-j0/`), depuis WSL (Ubuntu 24.04). Elles couvrent la convergence de deux terminaux, la lecture par KeePassXC du coffre du serveur, COPY et MOVE en 201 par HTTPS, MKCOL refusé (403) et les refus de `lgs`. Aucun échec d'authentification n'a été provoqué |
+| R6 | Réussi | Intégration continue verte, avant et après la revue |
+
+Points relevés pendant la recette, à reprendre au jalon 1 :
+- Un fichier introuvable donne `erreur d'entrée-sortie : Le fichier spécifié est introuvable. (os error 2)`, sans dire s'il s'agit du coffre ou du fichier clé. Le message doit nommer le fichier.
+- `lgs list` n'affiche rien pour un coffre sans entrée. Un message explicite éviterait le doute.
+- La fusion d'une copie modifiée par KeePassDX ou KeePassXC compte aussi `1 mise(s) à jour` : ces applications modifient les dates du groupe racine. C'est sans conséquence.
