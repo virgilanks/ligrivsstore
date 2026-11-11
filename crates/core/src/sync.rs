@@ -235,6 +235,10 @@ pub struct SyncState {
     /// Date du dernier refus d'identifiants (UTC, ISO 8601) : tant qu'elle est
     /// présente, la synchronisation est suspendue.
     pub credentials_rejected_utc: Option<String>,
+    /// Empreinte SHA-256 du dernier fichier local écrit par le noyau. À
+    /// l'ouverture, elle dit si le fichier est bien le sien, et donc s'il peut
+    /// être envoyé tel quel.
+    pub last_written_sha256: Option<String>,
 }
 
 impl SyncState {
@@ -610,6 +614,7 @@ mod tests {
             last_uploaded_sha256: None,
             last_sync_utc: Some("2026-11-11T10:00:00Z".into()),
             credentials_rejected_utc: None,
+            last_written_sha256: Some("ab".repeat(32)),
         };
         state.save(&path).unwrap();
         assert_eq!(SyncState::load(&path), state);
@@ -628,6 +633,8 @@ mod tests {
         assert_eq!(state.remote_etag.as_deref(), Some("\"abc\""));
         assert!(!state.local_dirty);
         assert!(state.credentials_rejected_utc.is_none());
+        // Sans empreinte, le fichier sera réécrit avant le prochain envoi.
+        assert!(state.last_written_sha256.is_none());
     }
 
     #[test]

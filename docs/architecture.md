@@ -33,7 +33,7 @@ Fichiers d'un coffre `coffre.kdbx` :
 
 - `coffre.kdbx` : le coffre chiffré ;
 - `coffre.kdbx.sauvegardes/` : les dix versions précédentes, chiffrées comme le coffre ;
-- `coffre.kdbx.synchro.json` : l'état de synchronisation (étiquette du serveur, modifications à envoyer, empreinte du dernier envoi), sans aucun secret.
+- `coffre.kdbx.synchro.json` : l'état de synchronisation (étiquette du serveur, modifications à envoyer, empreintes du dernier envoi et du dernier fichier écrit), sans aucun secret.
 
 Sous Unix, ces fichiers ne sont lisibles que par leur propriétaire (droits 600, dossier 700).
 
@@ -46,7 +46,11 @@ Sous Unix, ces fichiers ne sont lisibles que par leur propriétaire (droits 600,
 │            empreinte = celle de notre dernier envoi ? → rien à fusionner
 │            sinon : ouvrir (même clé, même coffre, sinon arrêt) puis fusionner
 │   2. rien à envoyer → enregistrer la fusion éventuelle, retenir l'étiquette, fin
-│   3. enregistrer localement (atomique, relu), puis PUT de ces mêmes octets
+│   3. PUT du fichier local : tel quel s'il contient déjà le coffre en mémoire
+│      (écrit par le noyau, empreinte inchangée) ; sinon (fusion, modification
+│      non enregistrée), l'enregistrer d'abord (atomique, relu), puis PUT de
+│      ces mêmes octets. Sans fusion, aucune réécriture, donc aucune sauvegarde
+│      en double : la plus récente reste l'état d'avant la dernière modification
 │      If-Match : étiquette   (ou If-None-Match : * s'il n'existe pas)
 │      2xx : fin (l'étiquette renvoyée, faible, n'est pas conservée)
 └── 412 : un autre terminal a écrit entre-temps → recommencer (5 tentatives au plus)

@@ -12,8 +12,12 @@
 //!    fusionner dans le coffre local. Un coffre distant illisible ou chiffré
 //!    avec une autre clé arrête tout : rien n'est envoyé.
 //! 3. S'il y a des modifications locales (ou aucun coffre sur le serveur) :
-//!    enregistrer localement (écriture atomique et relecture), puis envoyer
-//!    exactement ces octets avec `If-Match` (ou `If-None-Match: *`).
+//!    envoyer le fichier local avec `If-Match` (ou `If-None-Match: *`). S'il
+//!    contient déjà le coffre en mémoire (écrit par le noyau, inchangé depuis),
+//!    il part tel quel ; sinon (fusion, modification non enregistrée), il est
+//!    d'abord enregistré (écriture atomique et relecture), puis envoyé
+//!    exactement. Un envoi sans fusion ne réécrit donc pas le fichier : la
+//!    sauvegarde la plus récente reste l'état d'avant la dernière modification.
 //! 4. Envoi refusé (412) : un autre terminal a écrit entre-temps ; reprendre à
 //!    l'étape 1.
 //!
@@ -52,6 +56,10 @@ pub struct LocalVault {
     limits: OpenLimits,
     vault: Vault,
     state: SyncState,
+    /// Le fichier local contient exactement le coffre en mémoire : écrit par
+    /// le noyau (empreinte `state.last_written_sha256`), et rien n'a changé en
+    /// mémoire depuis.
+    file_matches: bool,
 }
 
 impl LocalVault {
@@ -73,6 +81,7 @@ impl LocalVault {
             limits: OpenLimits::default(),
             vault,
             state: SyncState::unknown(),
+            file_matches: false,
         };
         local.save()?;
         Ok(local)
@@ -84,12 +93,17 @@ impl LocalVault {
         let bytes = store.read()?;
         let vault = Vault::open(&bytes, &key, &limits)?;
         let state = SyncState::load(&store.sibling(STATE_SUFFIX));
+        // Un fichier écrit par un autre programme (ou dont l'écriture n'a pas
+        // été consignée) sera réécrit par le noyau avant tout envoi.
+        let file_matches =
+            state.last_written_sha256.as_deref() == Some(sha256_hex(&bytes).as_str());
         Ok(Self {
             store,
             key,
             limits,
             vault,
             state,
+            file_matches,
         })
     }
 
@@ -119,6 +133,9 @@ impl LocalVault {
             last_uploaded_sha256: None,
             last_sync_utc: Some(now()),
             credentials_rejected_utc: None,
+            // Fichier écrit par un autre terminal : le noyau le réécrira avant
+            // tout envoi, avec sa propre politique de dérivation.
+            last_written_sha256: None,
         };
         let local = Self {
             store,
@@ -126,6 +143,7 @@ impl LocalVault {
             limits,
             vault,
             state,
+            file_matches: false,
         };
         local.save_state()?;
         Ok(local)
@@ -143,6 +161,7 @@ impl LocalVault {
 
     /// Coffre en écriture ; appeler [`LocalVault::save`] ensuite.
     pub fn vault_mut(&mut self) -> &mut Vault {
+        self.file_matches = false;
         &mut self.vault
     }
 
@@ -183,9 +202,12 @@ impl LocalVault {
     /// restauration elle-même peut être annulée.
     pub fn restore_backup(&mut self, file_name: &str) -> Result<RestoreReport> {
         let backup = self.open_backup(file_name)?;
+        let matched = std::mem::replace(&mut self.file_matches, false);
         let report = self.vault.restore_entries_from(&backup)?;
         if report.restored + report.recreated > 0 {
             self.save()?;
+        } else {
+            self.file_matches = matched;
         }
         Ok(report)
     }
@@ -262,8 +284,12 @@ impl LocalVault {
                     {
                         let remote =
                             Vault::open(&body, &self.key, &self.limits).map_err(remote_error)?;
+                        let matched = std::mem::replace(&mut self.file_matches, false);
                         let merge = self.vault.merge_from(&remote)?;
                         local_changed = !merge.is_empty();
+                        if !local_changed {
+                            self.file_matches = matched;
+                        }
                         report.merge.absorb(merge);
                     }
                     (true, Some(etag.as_str().to_owned()))
@@ -281,12 +307,18 @@ impl LocalVault {
                 return Ok(report);
             }
 
-            // 3 bis. Envoi des octets enregistrés et vérifiés localement.
+            // 3 bis. Envoi des octets enregistrés et vérifiés localement : le
+            // fichier tel quel s'il contient déjà le coffre en mémoire, sans
+            // réécriture ni sauvegarde superflue ; sinon un nouvel
+            // enregistrement.
             let precondition = match remote_etag {
                 Some(etag) => Precondition::IfMatch(etag),
                 None => Precondition::IfNoneMatchAny,
             };
-            let bytes = self.write_local()?;
+            let bytes = match self.saved_file() {
+                Some(bytes) => bytes,
+                None => self.write_local()?,
+            };
             match transport.store(&bytes, &precondition)? {
                 StoreOutcome::Stored => {
                     report.uploaded = true;
@@ -314,7 +346,21 @@ impl LocalVault {
         self.store.write_verified(&bytes, |written| {
             Vault::open(written, key, limits).map(|_| ())
         })?;
+        self.state.last_written_sha256 = Some(sha256_hex(&bytes));
+        self.file_matches = true;
         Ok(bytes)
+    }
+
+    /// Le fichier local, s'il contient exactement le coffre en mémoire : écrit
+    /// et vérifié par le noyau, inchangé sur le disque depuis (empreinte), et
+    /// rien n'a changé en mémoire.
+    fn saved_file(&self) -> Option<Vec<u8>> {
+        if !self.file_matches {
+            return None;
+        }
+        let expected = self.state.last_written_sha256.as_deref()?;
+        let bytes = self.store.read().ok()?;
+        (sha256_hex(&bytes) == expected).then_some(bytes)
     }
 
     fn save_state(&self) -> Result<()> {

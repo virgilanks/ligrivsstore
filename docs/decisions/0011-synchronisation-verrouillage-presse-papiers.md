@@ -62,6 +62,7 @@ Le noyau savait déjà synchroniser (jalon 0). Il fallait décider où ranger le
   - les entrées créées depuis sont conservées, et l'entrée réservée n'est jamais rétablie.
 - Seuls les fichiers du dossier des sauvegardes du coffre sont acceptés. Une sauvegarde d'un autre coffre est refusée.
 - L'état d'avant la restauration devient lui-même une sauvegarde : la restauration s'annule.
+- Une synchronisation n'ajoute pas de sauvegarde, sauf quand elle fusionne des modifications venues du serveur. Sans fusion, elle envoie le fichier tel qu'enregistré, sans le réécrire. Le noyau reconnaît ce fichier à son empreinte SHA-256, gardée dans l'état de synchronisation ; un fichier modifié par un autre programme est réécrit avant l'envoi. Ainsi, la sauvegarde la plus récente reste l'état d'avant la dernière modification, même après la synchronisation qui la suit de 10 secondes. Défaut trouvé à la relecture de la recette (étape S2-7) et corrigé avant la fusion : chaque envoi réécrivait le fichier, si bien que la sauvegarde la plus récente reproduisait l'état courant et que sa restauration ne rétablissait rien.
 
 ### Phrases de passe (D8)
 
@@ -75,7 +76,8 @@ Le noyau savait déjà synchroniser (jalon 0). Il fallait décider où ranger le
   1. création, réglage et premier envoi sur le premier poste ;
   2. installation depuis le serveur sur le second ;
   3. modifications des deux côtés, puis convergence ;
-  4. mauvais mot de passe, suspension, nouvelle saisie.
+  4. suppression synchronisée, puis restauration de la sauvegarde la plus récente, propagée à l'autre poste ;
+  5. mauvais mot de passe, suspension, nouvelle saisie.
 - Essai de l'application compilée, avec deux instances contre le banc : création, réglage, installation, ajout, synchronisation automatique 10 secondes après, fusion, suppression puis restauration propagées, verrouillage après une minute d'inactivité.
 - Restent pour la suite :
   - le démarrage avec Windows et la zone de notification (semaine 3, avec le relais) ;

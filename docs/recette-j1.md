@@ -76,11 +76,12 @@ Livrable vérifiable : **deux postes synchronisés par le serveur « coffre »**
 
 | Essai | Résultat |
 |---|---|
-| Tests du dépôt, avec KeePassXC 2.7.6 et le banc Apache derrière le relais HTTPS (Linux, Rust 1.97.0) | 141 réussis, 0 échec, 1 ignoré (générateur des graines du fuzzing) |
-| Deux postes (`crates/app/tests/deux_postes.rs`), contre le banc : création et premier envoi, installation depuis le serveur, modifications des deux côtés et convergence, mauvais mot de passe puis suspension, nouvelle saisie | Réussi |
+| Tests du dépôt, avec KeePassXC 2.7.6 et le banc Apache derrière le relais HTTPS (Linux, Rust 1.97.0) | 145 réussis, 0 échec, 1 ignoré (générateur des graines du fuzzing) |
+| Deux postes (`crates/app/tests/deux_postes.rs`), contre le banc : création et premier envoi, installation depuis le serveur, modifications des deux côtés et convergence, suppression synchronisée puis restauration de la sauvegarde la plus récente (propagée), mauvais mot de passe puis suspension, nouvelle saisie | Réussi |
+| Scénario de bout en bout de l'outil `lgs` (`scripts/scenario-synchro.sh`), contre le banc, après la correction ci-dessous | 25 réussis, 0 échoué |
 | Pilote (`autopilot`) : verrouillage à l'inactivité, réveil détecté par un saut d'horloge, synchronisation à l'ouverture, 10 s après la dernière modification et toutes les 15 minutes, essais espacés hors ligne, aucun essai après un refus, effacement du presse-papiers | Réussi |
 | Session : entrée réservée cachée et refusée aux commandes ordinaires, serveur injoignable (hors ligne), refus d'identifiants (une seule requête, puis plus rien, même après réouverture), pause d'une minute à l'installation après un refus, sauvegardes, copie, réglages, phrases de passe | Réussi |
-| Noyau : liste de l'EFF (empreinte SHA-256), phrases de passe, entrées réservées à travers enregistrement et fusion, restauration sans perte, sauvegarde d'un autre coffre refusée | Réussi |
+| Noyau : liste de l'EFF (empreinte SHA-256), phrases de passe, entrées réservées à travers enregistrement et fusion, restauration sans perte, sauvegarde d'un autre coffre refusée ; envoi du fichier enregistré sans réécriture ni sauvegarde en double, y compris après réouverture ; réécriture avant l'envoi d'une modification non enregistrée ou d'un fichier modifié par un autre programme | Réussi |
 | Sous Windows, dans l'intégration continue : fenêtre cachée qui reçoit verrouillage de session et mise en veille ; presse-papiers protégé (trois formats lus et vérifiés, effacement, copie d'un autre programme respectée) ; clippy sur le code propre à Windows | Réussi |
 | `svelte-check`, `cargo fmt`, `cargo clippy -D warnings` (dépôt et coquille), `cargo deny` (dépôt, application Windows), `npm audit` des paquets livrés | Aucune remarque ; conformes |
 | Intégration continue sur GitHub (Rust 1.99.1), demande n° 5 | Verte : 141 tests sous Linux, 144 sous Windows (KeePassXC 2.8.0) ; essai `deux_postes` contre le banc derrière le relais HTTPS ; installateur produit (archive de 3,4 Mo) |
@@ -102,23 +103,25 @@ Deux instances de l'application compilée, chacune avec son propre profil, pilot
 
 La copie dans le presse-papiers ne fonctionne que sous Windows : sous Linux, l'application affiche « fonction disponible sous Windows seulement ». Le presse-papiers est vérifié par l'intégration continue sous Windows, et par vous (S2-5).
 
+Défaut trouvé en relisant la recette (étape S2-7), corrigé avant la fusion : chaque synchronisation réécrivait le fichier du coffre, et chaque réécriture ajoutait une sauvegarde identique à l'état courant. Dix secondes après une suppression, la sauvegarde la plus récente ne contenait donc plus l'entrée, et sa restauration ne rétablissait rien. Pendant l'essai ci-dessus, la restauration avait eu lieu avant la synchronisation automatique, ce qui masquait le défaut. Désormais, un envoi sans fusion envoie le fichier tel qu'enregistré, reconnu à son empreinte, sans le réécrire (décision 0011). L'essai `deux_postes` joue maintenant ce cas contre le banc, et quatre essais du noyau couvrent la règle.
+
 ### 3. Recette par Hermann
 
 Avec le compte de recette `recette-j0` du serveur en service, et un coffre d'essai nommé `recette-j1.kdbx` sur le serveur. Saisissez le mot de passe du serveur sans erreur : le serveur bloque votre adresse pendant 4 heures après cinq refus en rafale. Ne communiquez ni ce mot de passe ni la phrase de passe, pas même dans une conversation avec Claude.
 
 | N° | Étape | Attendu |
 |---|---|---|
-| S2-1 | Installer l'installateur de la demande de fusion n° 5 (onglet « Checks », comme en S1-1), par-dessus la version de la semaine 1 | Le coffre de la semaine 1 s'ouvre toujours |
+| S2-1 | Installer l'installateur de la demande de fusion n° 5, par-dessus la version de la semaine 1. Le prendre dans l'onglet « Checks », comme en S1-1 : cet onglet montre l'exécution la plus récente, la seule qui contienne la correction de S2-7 | Le coffre de la semaine 1 s'ouvre toujours |
 | S2-2 | Onglet « Synchronisation » : adresse `https://coffre.ligrivs.com`, compte `recette-j0`, nom `recette-j1.kdbx`, mot de passe du serveur, puis « Enregistrer » | Pastille « À jour » en quelques secondes |
-| S2-3 | Second poste, au choix : un autre PC Windows, avec l'application et « Installer le coffre du serveur… » ; ou l'outil `lgs` dans WSL (commandes ci-dessous) | Les entrées du premier poste y apparaissent |
+| S2-3 | Second poste, au choix : un autre PC Windows, avec l'application et « Installer le coffre du serveur… » (fichier clé : « Choisir… », la copie faite en S1-9) ; ou l'outil `lgs` dans WSL (commandes ci-dessous) | Les entrées du premier poste y apparaissent. `lgs` liste en plus « Serveur de synchronisation (ligrivsstore) » : c'est l'entrée réservée qui porte les identifiants du serveur, que l'application cache |
 | S2-4 | Ajouter une entrée sur le second poste et la synchroniser ; dans l'application, « Synchroniser maintenant ». Modifier ensuite une entrée dans l'application, attendre 10 s, synchroniser le second poste | Chaque modification apparaît de l'autre côté ; l'historique garde la version précédente |
-| S2-5 | « Copier » un mot de passe, le coller dans le Bloc-notes, puis ouvrir Windows + V ; attendre 30 s et coller de nouveau | Collé une fois ; absent de l'historique ; plus rien à coller après 30 s |
-| S2-6 | Réglages : verrouillage après 1 minute ; attendre sans toucher l'application. Puis Windows + L, rouvrir la session. Puis mise en veille et réveil | Trois fois l'écran de déverrouillage, avec le motif : inactivité, session Windows, mise en veille |
-| S2-7 | Supprimer une entrée, puis onglet « Sauvegardes » : restaurer la plus récente | L'entrée revient ; après synchronisation, aussi sur le second poste |
+| S2-5 | Ouvrir Windows + V et, s'il le propose, activer l'historique du presse-papiers : sans lui, l'essai ne prouve rien. « Copier » un mot de passe dans l'application, le coller dans le Bloc-notes, puis rouvrir Windows + V. Attendre 30 s et coller de nouveau | Collé une fois ; absent de l'historique ; plus rien à coller après 30 s |
+| S2-6 | Réglages : verrouillage après 1 minute ; attendre sans toucher l'application. Puis Windows + L, rouvrir la session. Puis mise en veille et réveil. Déverrouiller le coffre entre deux essais | Trois fois l'écran de déverrouillage, avec le motif : inactivité, session Windows, mise en veille |
+| S2-7 | Supprimer une entrée et attendre au moins 15 s : la synchronisation automatique passe. Puis onglet « Sauvegardes » : restaurer la plus récente | « Restauration faite : 0 entrée rétablie, 1 recréée. » ; l'entrée revient ; après synchronisation, aussi sur le second poste |
 | S2-8 | Générateur d'une fiche : « Phrase de passe » ; à la création d'un coffre : « Proposer… » | Mots anglais séparés ; entropie affichée |
 | S2-9 | Remettre le verrouillage à 5 minutes | — |
 
-Second poste dans WSL (Ubuntu), depuis le dossier du dépôt, mis à jour par `git pull` après la fusion. Remplacez `<vous>` par votre nom d'utilisateur Windows ; les deux `read` demandent les secrets au clavier, sans les afficher :
+Second poste dans WSL (Ubuntu), depuis le dossier du dépôt, à jour de la branche `main` (`git pull`). Ces commandes existent depuis le jalon 0 : inutile d'attendre la fusion de la semaine 2. Remplacez `<vous>` par votre nom d'utilisateur Windows ; les deux `read` demandent les secrets au clavier, sans les afficher :
 
 ```bash
 cargo build -p ligrivsstore-cli

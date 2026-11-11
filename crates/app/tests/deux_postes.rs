@@ -1,6 +1,7 @@
 //! Deux postes synchronisés par le serveur « coffre » : le livrable de la
 //! semaine 2 du jalon 1, vérifié de bout en bout avec la logique de
-//! l'application (sessions, entrée réservée, installation depuis le serveur).
+//! l'application (sessions, entrée réservée, installation depuis le serveur,
+//! restauration d'une sauvegarde).
 //!
 //! Variables d'environnement (posées par `scripts/banc-webdav.sh`) :
 //! `LGS_TEST_WEBDAV_URL`, `LGS_TEST_WEBDAV_CA`, `LGS_TEST_WEBDAV_USER`,
@@ -182,6 +183,30 @@ fn two_pcs_stay_in_sync_through_the_server() {
         assert_eq!(titles(pc), ["Banque", "Messagerie"]);
         assert_eq!(pc.reveal_password(&banque).unwrap().as_str(), "banque-v2");
         assert_eq!(pc.entry(&banque).unwrap().history_len, 1);
+    }
+
+    // Suppression sur le PC 2, synchronisée, puis restauration de la
+    // sauvegarde la plus récente (étape S2-7 de la recette) : l'entrée
+    // revient, sur les deux postes.
+    let messagerie = pc2
+        .list_entries("")
+        .unwrap()
+        .into_iter()
+        .find(|row| row.title == "Messagerie")
+        .unwrap()
+        .id;
+    pc2.delete_entry(&messagerie).unwrap();
+    let (_, uploaded, _) = done(pc2.sync_now());
+    assert!(uploaded);
+    let newest = pc2.backups().unwrap().remove(0);
+    let report = pc2.restore_backup(&newest.id).unwrap();
+    assert_eq!(report.recreated, 1, "{report:?}");
+    let (_, uploaded, _) = done(pc2.sync_now());
+    assert!(uploaded);
+    let (downloaded, _, merged) = done(pc1.sync_now());
+    assert!(downloaded && merged > 0);
+    for pc in [&pc1, &pc2] {
+        assert_eq!(titles(pc), ["Banque", "Messagerie"]);
     }
 
     // Mauvais mot de passe du serveur sur le PC 1 : suspendue, sans nouvel
