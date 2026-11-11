@@ -54,12 +54,14 @@ Critère de sortie du jalon 0 : R1, R2, R3, R5 et R6 réussis.
 
 | N° | Résultat | Constats |
 |---|---|---|
-| R1 | En attente du bilan | Rust est installé et le dépôt compile sous Windows : l'outil `lgs`, installé avec `cargo install`, a servi pour R2 et R3. Reste à relever le total des tests (80 réussis attendus). |
+| R1 | Réussi | 80 tests réussis et aucun échec, comme dans l'intégration continue sous Windows. Le seul test ignoré sert à générer, à la demande, les graines du fuzzing. Sous Windows, les 3 tests KeePassXC et les 6 tests du serveur s'arrêtent sans rien vérifier, faute d'outils : l'intégration continue Linux les exécute, et R2 et R5 les couvrent à la main |
 | R2 | Réussi | Le coffre créé par `lgs` s'ouvre dans KeePassXC pour Windows, avec le fichier clé. La modification faite dans KeePassXC est relue par `lgs` (`Versions antérieures : 1`). En sens inverse, `lgs` ouvre un coffre et un fichier clé (format XML 2.0) créés par KeePassXC. À l'écriture, il garde les réglages de KeePassXC (64 Mio, 60 itérations, 4 voies) et passe le coffre en Argon2id et KDBX 4.1 |
 | R3 | Réussi | Le coffre s'ouvre avec KeePassDX sur Android, fichier clé compris. L'entrée ajoutée sur le téléphone est fusionnée par `lgs merge` (`1 ajout(s)`), et l'entrée Banque est conservée |
 | R4 | Non fait | Facultatif : pas d'iPhone disponible |
 | R5 | Réussi | 22 vérifications sur 22 contre le serveur en service (`https://coffre.ligrivs.com/dav/recette-j0/`), depuis WSL (Ubuntu 24.04). Elles couvrent la convergence de deux terminaux, la lecture par KeePassXC du coffre du serveur, COPY et MOVE en 201 par HTTPS, MKCOL refusé (403) et les refus de `lgs`. Aucun échec d'authentification n'a été provoqué |
 | R6 | Réussi | Intégration continue verte, avant et après la revue |
+
+**Critère de sortie atteint** : R1, R2, R3, R5 et R6 sont réussis. Le jalon 0 peut être fusionné.
 
 Points relevés pendant la recette, à reprendre au jalon 1 :
 - Un fichier introuvable donne `erreur d'entrée-sortie : Le fichier spécifié est introuvable. (os error 2)`, sans dire s'il s'agit du coffre ou du fichier clé. Le message doit nommer le fichier.
