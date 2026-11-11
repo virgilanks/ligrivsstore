@@ -20,6 +20,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # svelte-check 4.7 n'admet pas encore TypeScript 7 (dépendance pair
+      # ^5 || ^6) : la demande n° 4 échouait à « npm ci » (décision 0010).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

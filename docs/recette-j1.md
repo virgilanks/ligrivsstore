@@ -107,7 +107,7 @@ Avec le compte de recette `recette-j0` du serveur en service, et un coffre d'ess
 
 | N° | Étape | Attendu |
 |---|---|---|
-| S2-1 | Installer l'installateur de la demande de fusion n° 4, par-dessus la version de la semaine 1 | Le coffre de la semaine 1 s'ouvre toujours |
+| S2-1 | Installer l'installateur de la demande de fusion n° 5 (onglet « Checks », comme en S1-1), par-dessus la version de la semaine 1 | Le coffre de la semaine 1 s'ouvre toujours |
 | S2-2 | Onglet « Synchronisation » : adresse `https://coffre.ligrivs.com`, compte `recette-j0`, nom `recette-j1.kdbx`, mot de passe du serveur, puis « Enregistrer » | Pastille « À jour » en quelques secondes |
 | S2-3 | Second poste, au choix : un autre PC Windows, avec l'application et « Installer le coffre du serveur… » ; ou l'outil `lgs` dans WSL (commandes ci-dessous) | Les entrées du premier poste y apparaissent |
 | S2-4 | Ajouter une entrée sur le second poste et la synchroniser ; dans l'application, « Synchroniser maintenant ». Modifier ensuite une entrée dans l'application, attendre 10 s, synchroniser le second poste | Chaque modification apparaît de l'autre côté ; l'historique garde la version précédente |
