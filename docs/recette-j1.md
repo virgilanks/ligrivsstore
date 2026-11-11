@@ -121,18 +121,30 @@ Avec le compte de recette `recette-j0` du serveur en service, et un coffre d'ess
 | S2-8 | Générateur d'une fiche : « Phrase de passe » ; à la création d'un coffre : « Proposer… » | Mots anglais séparés ; entropie affichée |
 | S2-9 | Remettre le verrouillage à 5 minutes | — |
 
-Second poste dans WSL (Ubuntu), depuis le dossier du dépôt, à jour de la branche `main` (`git pull`). Ces commandes existent depuis le jalon 0 : inutile d'attendre la fusion de la semaine 2. Remplacez `<vous>` par votre nom d'utilisateur Windows ; les deux `read` demandent les secrets au clavier, sans les afficher :
+Second poste dans WSL (Ubuntu), depuis le dossier du dépôt, à jour de la branche `main` (`git pull`). Ces commandes existent depuis le jalon 0 : inutile d'attendre la fusion de la semaine 2. Remplacez `<vous>` par votre nom d'utilisateur Windows.
 
-```bash
-cargo build -p ligrivsstore-cli
-cp /mnt/c/Users/<vous>/AppData/Local/ligrivsstore-cles/coffre.keyx ~/recette-j1.keyx
-read -rs LGS_PASSWORD && export LGS_PASSWORD                 # phrase de passe du coffre
-read -rs LGS_WEBDAV_PASSWORD && export LGS_WEBDAV_PASSWORD   # mot de passe du serveur
-URL=https://coffre.ligrivs.com/dav/recette-j0/recette-j1.kdbx
-target/debug/lgs clone ~/recette-j1.kdbx --url $URL --user recette-j0 -k ~/recette-j1.keyx
-target/debug/lgs list ~/recette-j1.kdbx -k ~/recette-j1.keyx
-target/debug/lgs add ~/recette-j1.kdbx --title "Ajout depuis WSL" --username essai --generate 20 -k ~/recette-j1.keyx
-target/debug/lgs sync ~/recette-j1.kdbx --url $URL --user recette-j0 -k ~/recette-j1.keyx
-```
+1. Préparation :
+
+   ```bash
+   cargo build -p ligrivsstore-cli
+   cp /mnt/c/Users/<vous>/AppData/Local/ligrivsstore-cles/coffre.keyx ~/recette-j1.keyx
+   ```
+
+2. Les deux secrets, une ligne à la fois. Chaque ligne pose sa question, puis attend la saisie, qui reste masquée. Ne les collez pas avec la suite : le terminal pourrait prendre la ligne suivante du collage pour le secret.
+
+   ```bash
+   read -rsp "Phrase de passe du coffre : " LGS_PASSWORD && echo && export LGS_PASSWORD
+   read -rsp "Mot de passe du serveur : " LGS_WEBDAV_PASSWORD && echo && export LGS_WEBDAV_PASSWORD
+   ```
+
+3. Installation, liste, ajout et envoi. `lgs clone` et `lgs list` comptent et montrent aussi l'entrée réservée « Serveur de synchronisation (ligrivsstore) ». En cas de refus d'identifiants (401), ne relancez pas : cinq refus en rafale bannissent l'adresse du PC pendant 4 heures, ce qui bloque aussi l'application Windows.
+
+   ```bash
+   URL=https://coffre.ligrivs.com/dav/recette-j0/recette-j1.kdbx
+   target/debug/lgs clone ~/recette-j1.kdbx --url $URL --user recette-j0 -k ~/recette-j1.keyx
+   target/debug/lgs list ~/recette-j1.kdbx -k ~/recette-j1.keyx
+   target/debug/lgs add ~/recette-j1.kdbx --title "Ajout depuis WSL" --username essai --generate 20 -k ~/recette-j1.keyx
+   target/debug/lgs sync ~/recette-j1.kdbx --url $URL --user recette-j0 -k ~/recette-j1.keyx
+   ```
 
 Si le coffre de la semaine 1 a été créé avec un autre fichier clé, utilisez celui-là. En cas d'écart, une capture d'écran et le numéro de l'étape suffisent.
