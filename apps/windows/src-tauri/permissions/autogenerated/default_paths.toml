@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-default-paths"
+description = "Enables the default_paths command without any pre-configured scope."
+commands.allow = ["default_paths"]
+
+[[permission]]
+identifier = "deny-default-paths"
+description = "Denies the default_paths command without any pre-configured scope."
+commands.deny = ["default_paths"]

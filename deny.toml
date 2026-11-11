@@ -13,8 +13,10 @@ ignore = []
 [licenses]
 version = 2
 confidence-threshold = 0.93
-# Licences permissives seulement : aucune licence à réciprocité (GPL, LGPL,
-# AGPL, MPL) n'est admise dans l'application.
+# Licences permissives seulement : aucune licence à réciprocité forte (GPL,
+# LGPL, AGPL) n'est admise. La MPL-2.0, dont la réciprocité s'arrête aux
+# fichiers du paquet lui-même, n'est admise que pour les paquets nommés dans
+# « exceptions » ci-dessous (décision 0010).
 allow = [
     "Apache-2.0",
     "BSD-2-Clause",
@@ -24,6 +26,17 @@ allow = [
     "MIT",
     "Unicode-3.0",
     "Zlib",
+]
+exceptions = [
+    # Dans l'application Windows, sans modification : son code source est
+    # indiqué dans les mentions des logiciels tiers (dirs-sys → dirs → tauri).
+    { allow = ["MPL-2.0"], crate = "option-ext" },
+    # Outils de compilation seulement (tauri-utils → tauri-codegen →
+    # tauri-macros, une macro procédurale) : absents du programme livré.
+    { allow = ["MPL-2.0"], crate = "cssparser" },
+    { allow = ["MPL-2.0"], crate = "cssparser-macros" },
+    { allow = ["MPL-2.0"], crate = "dtoa-short" },
+    { allow = ["MPL-2.0"], crate = "selectors" },
 ]
 # Nos propres paquets ne sont pas publiés.
 private = { ignore = true }

@@ -8,6 +8,18 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  # Coquille Tauri de l'application Windows (espace de travail à part).
+  - package-ecosystem: cargo
+    directory: /apps/windows/src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  # Interface et outils de construction de l'application Windows.
+  - package-ecosystem: npm
+    directory: /apps/windows
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: /
     schedule:
