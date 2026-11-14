@@ -11,6 +11,7 @@
   const LABELS: Record<SyncStatusView["state"], string> = {
     non_configuree: "Synchronisation non réglée",
     en_attente: "Synchronisation…",
+    a_envoyer: "Modifications à envoyer",
     en_cours: "Synchronisation…",
     a_jour: "À jour",
     hors_ligne: "Hors ligne",

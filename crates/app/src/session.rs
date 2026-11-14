@@ -179,7 +179,7 @@ impl Session {
         self.vault = Some(local);
         self.unsaved = false;
         self.remember(path, keyfile_path);
-        self.monitor.unlocked(false, None);
+        self.monitor.unlocked(false, None, false);
         Ok(self.status())
     }
 
@@ -381,6 +381,8 @@ impl Session {
     pub fn retry_save(&mut self) -> Result<(), AppError> {
         self.local_mut()?.save()?;
         self.unsaved = false;
+        // Enregistrée ici, la modification attend son envoi au serveur.
+        self.monitor.set_pending(true);
         Ok(())
     }
 
@@ -493,6 +495,9 @@ impl Session {
             self.unsaved = false;
         }
         self.monitor.sync_finished(&outcome);
+        if let Some(local) = self.vault.as_ref() {
+            self.monitor.set_pending(local.sync_state().local_dirty);
+        }
         outcome
     }
 
@@ -642,8 +647,9 @@ impl Session {
             return;
         };
         let configured = local.vault().role_entry(SYNC_ROLE).is_some();
+        let state = local.sync_state();
         self.monitor
-            .unlocked(configured, local.sync_state().last_sync_utc.clone());
+            .unlocked(configured, state.last_sync_utc.clone(), state.local_dirty);
     }
 
     /// Refuse les entrées réservées à l'application (identifiants du
@@ -1253,6 +1259,33 @@ mod tests {
             .unwrap();
         assert!(matches!(f.session.sync_now(), SyncOutcome::Suspended(_)));
         assert_eq!(server.requests(), 2);
+    }
+
+    #[test]
+    fn the_badge_shows_changes_waiting_to_be_sent() {
+        let mut f = Fixture::new();
+        f.create(KeyfileChoice::None);
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", closed.local_addr().unwrap());
+        drop(closed);
+        // Le réglage est enregistré dans le coffre : à envoyer, pas « à jour ».
+        f.session
+            .configure_sync(sync_request(&address, Some("mdp")))
+            .unwrap();
+        assert_eq!(f.session.monitor().activity().sync.state, "a_envoyer");
+        // Serveur injoignable : l'échec passe avant les modifications.
+        assert!(matches!(f.session.sync_now(), SyncOutcome::Offline(_)));
+        assert_eq!(f.session.monitor().activity().sync.state, "hors_ligne");
+        // Coffre rouvert : les modifications restent à envoyer.
+        f.session.lock(LockReason::Manual);
+        f.session
+            .open_vault(OpenVaultRequest {
+                path: f.path("coffres/coffre.kdbx"),
+                passphrase: PASSPHRASE.into(),
+                keyfile_path: None,
+            })
+            .unwrap();
+        assert_eq!(f.session.monitor().activity().sync.state, "a_envoyer");
     }
 
     #[test]

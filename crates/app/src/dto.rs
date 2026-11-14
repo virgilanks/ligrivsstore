@@ -227,8 +227,9 @@ pub struct Activity {
 pub struct SyncStatusView {
     /// Synchronisation réglée dans ce coffre.
     pub configured: bool,
-    /// `non_configuree`, `en_attente`, `en_cours`, `a_jour`, `hors_ligne`,
-    /// `suspendue` ou `erreur`.
+    /// `non_configuree`, `en_attente`, `a_envoyer` (modifications
+    /// enregistrées, pas encore envoyées), `en_cours`, `a_jour`,
+    /// `hors_ligne`, `suspendue` ou `erreur`.
     pub state: &'static str,
     /// Dernier échange réussi (UTC, ISO 8601).
     pub last_success: Option<String>,

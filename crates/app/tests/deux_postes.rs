@@ -161,10 +161,13 @@ fn two_pcs_stay_in_sync_through_the_server() {
     let (_, uploaded, _) = done(pc2.sync_now());
     assert!(!uploaded);
 
-    // Modifications des deux côtés, puis convergence.
+    // Modifications des deux côtés, puis convergence. La pastille signale
+    // la modification jusqu'à son envoi.
     add(&mut pc2, "Messagerie", "messagerie-v1");
+    assert_eq!(pc2.monitor().activity().sync.state, "a_envoyer");
     let (_, uploaded, _) = done(pc2.sync_now());
     assert!(uploaded);
+    assert_eq!(pc2.monitor().activity().sync.state, "a_jour");
     pc1.save_entry(SaveEntryRequest {
         id: Some(banque.clone()),
         title: "Banque".into(),

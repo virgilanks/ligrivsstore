@@ -87,6 +87,7 @@ export interface PassphraseOptions {
 export type SyncState =
   | "non_configuree"
   | "en_attente"
+  | "a_envoyer"
   | "en_cours"
   | "a_jour"
   | "hors_ligne"

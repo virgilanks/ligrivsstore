@@ -498,7 +498,8 @@ code {
 }
 
 .badge.state-en_cours .dot,
-.badge.state-en_attente .dot {
+.badge.state-en_attente .dot,
+.badge.state-a_envoyer .dot {
   background: var(--focus);
 }
 
