@@ -19,3 +19,6 @@
 *.swp
 .DS_Store
 Thumbs.db
+
+# Relais copié avant la construction de l'application (bundle.externalBin).
+/apps/windows/src-tauri/binaries/

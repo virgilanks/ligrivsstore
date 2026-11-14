@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Activity,
   BackupView,
+  BrowserView,
   CopyField,
   CreateVaultRequest,
   DefaultPaths,
@@ -14,6 +15,7 @@ import type {
   GeneratorOptions,
   InstallRequest,
   OpenVaultRequest,
+  PairingRequestView,
   PassphraseOptions,
   Preferences,
   RestoreView,
@@ -89,4 +91,11 @@ export const api = {
     call<Generated>("generate_passphrase", { options }),
   passphraseStrength: (passphrase: string) =>
     call<Strength>("passphrase_strength", { passphrase }),
+  listBrowsers: () => call<BrowserView[]>("list_browsers"),
+  pendingPairings: () => call<PairingRequestView[]>("pending_pairings"),
+  decidePairing: (id: string, confirm: boolean) => call<void>("decide_pairing", { id, confirm }),
+  revokeBrowser: (id: string) => call<void>("revoke_browser", { id }),
+  getAutostart: () => call<boolean>("get_autostart"),
+  /** Renvoie l'état obtenu. */
+  setAutostart: (enabled: boolean) => call<boolean>("set_autostart", { enabled }),
 };

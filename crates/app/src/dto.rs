@@ -219,6 +219,38 @@ pub struct Activity {
     pub revision: u64,
     /// Synchronisation.
     pub sync: SyncStatusView,
+    /// Demandes d'appairage d'un navigateur en attente de décision.
+    pub pairing_requests: usize,
+}
+
+/// Navigateur appairé, tel qu'affiché.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserView {
+    /// Numéro de l'appairage.
+    pub id: String,
+    /// Nom donné par l'extension.
+    pub browser: String,
+    /// Empreinte confirmée à l'appairage.
+    pub fingerprint: String,
+    /// Date de l'appairage (UTC, ISO 8601).
+    pub paired: String,
+    /// Dernière session (UTC, ISO 8601).
+    pub last_seen: Option<String>,
+}
+
+/// Demande d'appairage en attente, telle qu'affichée.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingRequestView {
+    /// Numéro de la demande.
+    pub id: String,
+    /// Nom donné par l'extension.
+    pub browser: String,
+    /// Empreinte à comparer avec celle de l'extension.
+    pub fingerprint: String,
+    /// Secondes restantes avant expiration.
+    pub seconds_left: u64,
 }
 
 /// État de la synchronisation.
@@ -227,8 +259,9 @@ pub struct Activity {
 pub struct SyncStatusView {
     /// Synchronisation réglée dans ce coffre.
     pub configured: bool,
-    /// `non_configuree`, `en_attente`, `en_cours`, `a_jour`, `hors_ligne`,
-    /// `suspendue` ou `erreur`.
+    /// `non_configuree`, `en_attente`, `a_envoyer` (modifications
+    /// enregistrées, pas encore envoyées), `en_cours`, `a_jour`,
+    /// `hors_ligne`, `suspendue` ou `erreur`.
     pub state: &'static str,
     /// Dernier échange réussi (UTC, ISO 8601).
     pub last_success: Option<String>,

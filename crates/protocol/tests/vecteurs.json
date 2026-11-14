@@ -1,0 +1,46 @@
+{
+  "app_ephemeral_public": "YFpyXSpK3+6xop4X7dYhwbdZPujNvESsbEq24vgF0jw=",
+  "app_ephemeral_secret": "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr8=",
+  "app_static_public": "eaYx7t4b+cmPEgMs3q3Q56B5OY/HhriMyEbsia+FpRo=",
+  "app_static_secret": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=",
+  "client_ephemeral_public": "I7e7jJGuAIcR+xKEZ4C83x4GX4Ib3+xJ9X58fc1MSCM=",
+  "client_ephemeral_secret": "cHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo8=",
+  "client_static_public": "2J47rXlDfb7Z+ENBgwT0YP8Fx/6B/kqVd6gEy5Nn/2Y=",
+  "client_static_secret": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8=",
+  "description": "Vecteurs d'essai du protocole ligrivsstore v1 (crates/protocol/src/crypto.rs). Clés réservées aux essais.",
+  "fingerprint": "28837 86338 03167 02448 69387 48472",
+  "key_app_to_client": "FAg9MP2Y9VhFgsCZ2t4kL6JgUClU5TAcoFzBqowTdJs=",
+  "key_client_to_app": "+AZTaNZ+FuEPQ5edgIEBwTRv0f3Yyo2jUn6xib5qmfk=",
+  "messages": [
+    {
+      "ciphertext": "N3+Pm2VHWJpYwJUTR5V+6uL2vjuhFkaK9lRqbhocwSS67VndLavK6JZNZH5HsQmoRGvM+OmR7YkNoXCKCaio0PppXEVJ9Yw=",
+      "direction": "app-vers-extension",
+      "n": 0,
+      "plaintext": "{\"op\":\"welcome\",\"app\":\"ligrivsstore\",\"version\":\"0.1.0\"}"
+    },
+    {
+      "ciphertext": "/6PxTmKaAe5mlPwZkFYR8QkDSzth/bNkEyJ9DRbTQWqmCkaH6dT+K+wlQnaRbcMp9dcfMjmepgBYTmnP8dpaohUmBKrRKLTe8NlGr5q7TA==",
+      "direction": "extension-vers-app",
+      "n": 0,
+      "plaintext": "{\"op\":\"entries\",\"id\":1,\"url\":\"https://www.banque.fr/connexion\"}"
+    },
+    {
+      "ciphertext": "djRmiMQXZE+sddnO3HRtimqLvDAS8d81HQoSQAgtZR0cwdVfhK2stp9Zjqeew1BB2WbsxHRdVJC2VBh3XF3pJznWLfnIt6BVKAosaHqnVuaZ1GlLLQYRfRLc2CW+o42OIhMDxwYSk/ee+eiFfoBbsrgeCoU5IceseJfqRkcf2fP8rFJU4kOzL6+leozdiyM0",
+      "direction": "app-vers-extension",
+      "n": 1,
+      "plaintext": "{\"op\":\"entries\",\"id\":1,\"entries\":[{\"id\":\"e1\",\"title\":\"Banque\",\"username\":\"hermann\",\"proximity\":\"same-origin\",\"insecure\":false}]}"
+    },
+    {
+      "ciphertext": "a77SDghBBus4SU7XDRaZvySRNfN1VjoXWa5gkFL46BQ7kuMWty0=",
+      "direction": "extension-vers-app",
+      "n": 1,
+      "plaintext": "{\"op\":\"status\",\"id\":2}"
+    },
+    {
+      "ciphertext": "TE1QdMmyl4FPlvbXYRXJxg==",
+      "direction": "extension-vers-app",
+      "n": 2,
+      "plaintext": ""
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 [package]
 name = "ligrivsstore-win"
-description = "Intégration à Windows de l'application de bureau ligrivsstore : verrouillage de session, mise en veille, presse-papiers protégé"
+description = "Intégration à Windows de l'application de bureau ligrivsstore : verrouillage de session, mise en veille, presse-papiers protégé, canal nommé, protection des clés (DPAPI)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,10 @@ repository.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+zeroize.workspace = true
+# Canal local entre le relais et l'application : canal nommé sous Windows,
+# socket Unix ailleurs (développement et essais).
+interprocess = "2.4.8"
 
 # Seules dépendances propres à Windows. windows-sys est publié par Microsoft ;
 # clipboard-win (licence BSL-1.0) est le presse-papiers qu'utilisent arboard et
@@ -19,11 +23,19 @@ thiserror.workspace = true
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_System_Console",
     "Win32_System_LibraryLoader",
     "Win32_System_RemoteDesktop",
+    "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
 clipboard-win = "5.4.3"
+# Chaînes UTF-16 pour le descripteur de sécurité du canal nommé (même version
+# que celle d'interprocess).
+widestring = "1.2.1"
 
 # Seul paquet du dépôt où le code `unsafe` est admis (décision 0011) : il est
 # refusé partout, sauf dans le module `systeme_windows`, où chaque bloc ne

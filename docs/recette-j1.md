@@ -175,3 +175,79 @@ Les neuf étapes, S2-1 à S2-9, sont réussies sur le PC Windows d'Hermann.
   - En attendant, l'étape S2-4 demande d'attendre 15 s.
 
 **Critère de sortie de la semaine 2 atteint** : deux postes synchronisés par le serveur « coffre ». La semaine 2 peut être fusionnée.
+
+## Semaine 3 — extension appairée, relais, zone de notification
+
+Livrable vérifiable : une extension appairée qui liste les entrées du site (note de conception n° 3, section 11). Décision 0012.
+
+### 1. Essais automatiques (14 novembre 2026)
+
+| Essai | Résultat |
+|---|---|
+| Tests du dépôt, avec KeePassXC 2.7.6 et le banc Apache derrière le relais HTTPS (Linux, Rust 1.97.0) | 190 réussis, 0 échec, 2 ignorés (générateurs des graines du fuzzing et des vecteurs du protocole) |
+| Protocole (`ligrivsstore-protocol`) : trames (ordre, taille maximale refusée sans allocation, troncature) ; messages (forme JSON stable, clés de 32 octets, versions inconnues refusées) ; empreinte ; sessions : clés d'autrui illisibles, clés publiques faibles refusées, messages rejoués, supprimés, réordonnés, altérés, tronqués ou renvoyés à leur auteur refusés ; vecteurs figés | 16 réussis |
+| Liaison par le canal (`crates/app/tests/liaison.rs`) : même empreinte des deux côtés ; appairage refusé ou sans réponse, donc sans session ; entrées de la page pour une extension appairée ; navigateur révoqué coupé au message suivant ; messages rejoués ou forgés, liaison fermée ; extension inconnue et liaison sans relais refusées ; clé de l'application conservée au redémarrage | 7 réussis |
+| Relais `ligrivsstore-pont` : seule l'extension admise le démarre ; trames transmises sans changement après l'origine ; trame trop grande, relais arrêté ; sans l'application, il la démarre ou signale son absence | 4 réussis |
+| Canal (socket Unix sous Linux) : échanges dans les deux sens, échec immédiat sans l'application, accès réservé au compte | 3 réussis |
+| Correspondance des domaines : cas de la note n° 3, suffixes de pays et à plusieurs niveaux, noms ressemblants et internationalisés jamais retenus, variantes d'écriture, entrée sans schéma, page en `http`, pages du navigateur | 8 réussis |
+| Navigateurs appairés : appairage conservé au redémarrage, fichier abîmé (aucun navigateur), demandes refusées ou sans réponse sans trace, demandes limitées, nouvel appairage qui remplace l'ancien | 4 réussis |
+| Session et pastille : entrées du site sans secret ; « Modifications à envoyer » tant qu'une modification attend (écart S2-4), y compris dans l'essai `deux_postes` contre le banc | Réussi |
+| Extension : types (TypeScript), vecteurs communs avec le paquet Rust, rejeu, altération ; une mise en œuvre indépendante (Node.js, Web Crypto) retrouve aussi les clés, l'empreinte et les chiffrés des vecteurs | 6 réussis ; `npm audit` sans remarque |
+| `svelte-check`, `cargo fmt`, `cargo clippy -D warnings` (dépôt et coquille), `cargo deny` (dépôt ; application pour Windows), `npm audit` | Aucune remarque ; conformes |
+| Intégration continue sur GitHub (Rust 1.99.1), demande n° 6, commit d133e95 | Verte : 190 tests sous Linux ; 196 sous Windows (KeePassXC 2.8.0), dont le canal nommé, le SID et DPAPI ; banc Apache derrière le relais HTTPS (tests du serveur 63/63, scénario 25/25, essai `deux_postes`) ; extension (6 essais, archive de 24 Ko) ; installateur produit avec le relais (3,67 Mio) |
+
+### 2. Essai de bout en bout sous Linux
+
+L'application compilée sous Linux, le relais et l'extension, pilotés par un automate (`extension/bout-en-bout/essai.mjs`) :
+- Chromium 153 (Playwright) avec l'extension ;
+- écran virtuel et gestionnaire de fenêtres ;
+- coffre d'essai de cinq entrées créé par `lgs` ;
+- page de connexion locale `http://www.exemple.test:8765/connexion`.
+
+Le relais est déclaré au navigateur comme l'installateur le fait sous Windows. Sous Linux, le canal est un socket Unix ; le canal nommé, DPAPI et le registre sont vérifiés sous Windows par l'intégration continue, puis par vous.
+
+| Étape | Résultat |
+|---|---|
+| Extension chargée, non appairée | Identifiant `pbjfabapbnileccikicpifdnhkocnlbb` ; « Ce navigateur n'est pas encore appairé. » |
+| « Appairer avec l'application », l'application étant arrêtée | Le relais la démarre, cachée ; elle se montre avec la demande d'appairage. L'extension affiche une empreinte de six groupes de cinq chiffres |
+| « Confirmer l'appairage » dans l'application (au clavier), puis « Oui, identique » dans l'extension | « Ce navigateur est appairé » ; Chromium retenu par l'application, avec la même empreinte |
+| Entrées demandées, coffre verrouillé | « le coffre est verrouillé : déverrouillez-le d'abord » |
+| Phrase de passe saisie au clavier dans l'application | Coffre ouvert ; entrées reçues : « Exemple » (même origine), puis « Exemple compte » (autre sous-domaine), toutes deux signalées non chiffrées |
+| Pièges du coffre : `autre-exemple.test`, `www.exemple.test.piege.test`, même site en `https` | Écartés ; aucun mot de passe transmis |
+| Fenêtre de l'extension sur la page | « 2 entrées pour www.exemple.test:8765 », avec « autre sous-domaine » et « connexion non chiffrée (http) » |
+| Fermeture de la fenêtre de l'application | Fenêtre cachée ; l'application tourne toujours et le coffre reste ouvert : l'extension liste encore les entrées |
+| « Ouvrir l'application » demandé par l'extension | Fenêtre montrée |
+| Fenêtre fermée, puis application relancée en arrière-plan, comme le ferait le relais ou le démarrage avec Windows | Rien ne s'affiche : l'application déjà lancée garde sa fenêtre cachée |
+| Application relancée normalement | La fenêtre de l'application déjà lancée revient ; une seule instance |
+| Fenêtre de l'extension sur une page interne du navigateur | « Rien à proposer sur cette page. » |
+
+Résultat : 20 vérifications réussies sur 20. Depuis la correction ci-dessous, l'essai a été joué treize fois, sans aucun échec.
+
+Défaut trouvé par cet essai, corrigé avant la demande de fusion. Quand l'extension démarre l'application, la demande d'appairage prend le focus ; une fois la demande tranchée, le champ de la phrase de passe ne le retrouvait pas, et la phrase tapée au clavier se perdait. La demande rend désormais le focus à l'élément qui l'avait avant elle.
+
+Écart corrigé en relisant le démarrage : un second lancement de l'application montrait toujours sa fenêtre, même lancé en arrière-plan. Si le relais ne joignait pas l'application qui tournait déjà, la fenêtre apparaissait donc sans raison. Un lancement en arrière-plan ne montre plus rien.
+
+La zone de notification, le menu de son icône et le démarrage avec Windows ne peuvent pas être essayés sous Linux : ils le seront par vous (S3-1, S3-10 et S3-11).
+
+### 3. Recette par Hermann
+
+Avec le coffre de recette de la semaine 2, qui contient l'entrée « amazon12 » (`https://amazon.com`). Prenez l'installateur et l'extension dans l'onglet « Checks » de la demande de fusion n° 6 (artefacts `ligrivsstore-installateur-windows` et `ligrivsstore-extension`).
+
+| N° | Étape | Attendu |
+|---|---|---|
+| S3-1 | Installer l'installateur par-dessus la version de la semaine 2, puis fermer la fenêtre de l'application | L'icône de ligrivsstore reste dans la zone de notification (à côté de l'horloge, au besoin sous la flèche « ^ ») ; son menu propose « Ouvrir », « Verrouiller », « Quitter » |
+| S3-2 | Décompresser l'extension. Dans Chrome : `chrome://extensions`, « Mode développeur », « Charger l'extension non empaquetée », choisir le dossier décompressé | Extension « ligrivsstore » chargée, d'identifiant `pbjfabapbnileccikicpifdnhkocnlbb` |
+| S3-3 | Options de l'extension (clic droit sur son icône, « Options ») : « Appairer avec l'application » | L'application montre la demande, avec la même empreinte (six groupes de cinq chiffres) que l'extension |
+| S3-4 | « Confirmer l'appairage » dans l'application, puis « Oui, identique » dans l'extension | « Ce navigateur est appairé » ; onglet « Navigateurs » de l'application : Chrome, avec l'empreinte et la date |
+| S3-5 | Verrouiller le coffre. Ouvrir `https://www.amazon.com` et cliquer sur l'icône de l'extension | « Le coffre est verrouillé » ; « Ouvrir l'application » montre sa fenêtre |
+| S3-6 | Déverrouiller, puis cliquer de nouveau sur l'icône, sur la même page | « amazon12 » et son identifiant, avec la mention « autre sous-domaine » (`www.amazon.com` contre `amazon.com`) ; aucun mot de passe affiché |
+| S3-7 | Ouvrir `https://www.amazon.fr`, puis cliquer sur l'icône | « Aucune entrée pour www.amazon.fr » : un autre domaine, même proche, ne reçoit rien |
+| S3-8 | Même chose dans Edge (`edge://extensions`, S3-2 à S3-4) | Edge listé à son tour dans l'onglet « Navigateurs » |
+| S3-9 | Révoquer Chrome dans l'onglet « Navigateurs », puis cliquer sur l'icône dans Chrome | « navigateur non appairé… » et « Appairer ce navigateur ». Ce bouton ouvre les options de l'extension, où « Appairer de nouveau » rétablit l'appairage (S3-3 et S3-4) |
+| S3-10 | « Quitter » dans le menu de l'icône de la zone de notification, puis cliquer sur l'icône de l'extension | L'application redémarre seule, cachée, coffre verrouillé : « Le coffre est verrouillé » |
+| S3-11 | Réglages : cocher « Démarrer avec Windows », fermer puis rouvrir la session Windows | L'icône est dans la zone de notification, coffre verrouillé. Décocher ensuite si vous ne le souhaitez pas |
+| S3-12 | Modifier une entrée | Pastille « Modifications à envoyer », puis « À jour » une dizaine de secondes après (correction de l'écart de S2-4) |
+
+SmartScreen ou l'antivirus peuvent signaler `ligrivsstore-pont.exe`, qui n'est pas encore signé (D3). Si l'extension répond « relais ligrivsstore introuvable », vérifiez que la clé `HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.ligrivs.ligrivsstore` existe (Éditeur du Registre), puis relancez l'application : elle la rétablit à chaque démarrage.
+
+En cas d'écart, une capture d'écran et le numéro de l'étape suffisent.

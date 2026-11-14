@@ -26,6 +26,7 @@ struct State {
     revision: u64,
     configured: bool,
     running: bool,
+    pending: bool,
     last_outcome: Option<SyncOutcome>,
     last_success_utc: Option<String>,
 }
@@ -36,16 +37,25 @@ impl Monitor {
         f(&mut state)
     }
 
-    /// Coffre ouvert ; `configured` : synchronisation réglée dans ce coffre.
-    pub fn unlocked(&self, configured: bool, last_success_utc: Option<String>) {
+    /// Coffre ouvert ; `configured` : synchronisation réglée dans ce coffre ;
+    /// `pending` : modifications enregistrées sur ce poste, pas encore
+    /// envoyées.
+    pub fn unlocked(&self, configured: bool, last_success_utc: Option<String>, pending: bool) {
         self.with(|s| {
             s.unlocked = true;
             s.lock_reason = None;
             s.configured = configured;
+            s.pending = pending;
             s.last_outcome = None;
             s.last_success_utc = last_success_utc;
             s.revision += 1;
         });
+    }
+
+    /// Modifications enregistrées sur ce poste et pas encore envoyées au
+    /// serveur : la pastille l'affiche au lieu de « À jour ».
+    pub fn set_pending(&self, pending: bool) {
+        self.with(|s| s.pending = pending);
     }
 
     /// Coffre verrouillé.
@@ -103,6 +113,8 @@ impl Monitor {
             lock_message: s.lock_reason.map(|r| r.message(s.lock_minutes)),
             revision: s.revision,
             sync: sync_view(s),
+            // Complété par la coquille, qui tient le registre des navigateurs.
+            pairing_requests: 0,
         })
     }
 }
@@ -114,6 +126,9 @@ fn sync_view(s: &State) -> SyncStatusView {
         ("en_cours", None)
     } else {
         match &s.last_outcome {
+            // Une modification attend l'envoi : ni « à jour », ni « en
+            // attente » de la première synchronisation.
+            None | Some(SyncOutcome::Done { .. }) if s.pending => ("a_envoyer", None),
             None => ("en_attente", None),
             Some(SyncOutcome::Done { .. }) => ("a_jour", None),
             Some(SyncOutcome::Offline(m)) => ("hors_ligne", Some(m.clone())),
@@ -138,7 +153,7 @@ mod tests {
     fn states_follow_the_session() {
         let monitor = Monitor::default();
         assert!(!monitor.activity().unlocked);
-        monitor.unlocked(true, None);
+        monitor.unlocked(true, None, false);
         let first = monitor.activity();
         assert_eq!(first.sync.state, "en_attente");
         monitor.sync_started();
@@ -165,8 +180,44 @@ mod tests {
             locked.lock_message.as_deref(),
             Some("Coffre verrouillé après 5 minutes d'inactivité.")
         );
-        monitor.unlocked(false, None);
+        monitor.unlocked(false, None, false);
         assert_eq!(monitor.activity().sync.state, "non_configuree");
         assert_eq!(monitor.activity().lock_message, None);
+    }
+
+    #[test]
+    fn a_change_waiting_to_be_sent_is_not_shown_as_up_to_date() {
+        let monitor = Monitor::default();
+        let done = SyncOutcome::Done {
+            downloaded: false,
+            uploaded: true,
+            merged: 0,
+        };
+        // Ouverture avec des modifications restées à envoyer.
+        monitor.unlocked(true, None, true);
+        assert_eq!(monitor.activity().sync.state, "a_envoyer");
+        monitor.sync_finished(&done);
+        monitor.set_pending(false);
+        assert_eq!(monitor.activity().sync.state, "a_jour");
+
+        // Modification enregistrée : à envoyer jusqu'à l'échange suivant.
+        monitor.set_pending(true);
+        assert_eq!(monitor.activity().sync.state, "a_envoyer");
+        monitor.sync_started();
+        assert_eq!(monitor.activity().sync.state, "en_cours");
+        monitor.sync_finished(&SyncOutcome::Offline("réseau".into()));
+        assert_eq!(
+            monitor.activity().sync.state,
+            "hors_ligne",
+            "un échec reste plus important à signaler"
+        );
+        monitor.sync_finished(&done);
+        monitor.set_pending(false);
+        assert_eq!(monitor.activity().sync.state, "a_jour");
+
+        // Sans synchronisation réglée, rien n'est « à envoyer ».
+        monitor.set_configured(false);
+        monitor.set_pending(true);
+        assert_eq!(monitor.activity().sync.state, "non_configuree");
     }
 }

@@ -25,6 +25,16 @@ updates:
       # ^5 || ^6) : la demande n° 4 échouait à « npm ci » (décision 0010).
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+  # Outils de construction de l'extension (elle n'emporte aucune
+  # dépendance). TypeScript suit la même version majeure que l'application.
+  - package-ecosystem: npm
+    directory: /extension
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

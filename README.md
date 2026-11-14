@@ -2,7 +2,7 @@
 
 Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec extension Chrome et Edge) et Android, puis iPhone, iPad et Mac. Chaque terminal garde son coffre chiffré et le synchronise avec le serveur « coffre » hébergé sur l'infrastructure Zanzibar.
 
-> **État : jalon 1 en cours (semaine 2 sur 5).** Le noyau, l'outil de recette, les tests et l'intégration continue sont en place et recettés (jalon 0). L'application Windows crée, ouvre et synchronise le coffre entre plusieurs PC, se verrouille seule, copie sans laisser de trace et restaure ses sauvegardes. L'extension et le remplissage arrivent dans les semaines suivantes.
+> **État : jalon 1 en cours (semaine 3 sur 5).** Le noyau, l'outil de recette, les tests et l'intégration continue sont en place et recettés (jalon 0). L'application Windows crée, ouvre et synchronise le coffre entre plusieurs PC, se verrouille seule, copie sans laisser de trace et restaure ses sauvegardes. L'extension pour Chrome et Edge s'appaire avec elle et liste les entrées du site ouvert ; le remplissage arrive en semaine 4.
 
 ## Principes
 
@@ -19,8 +19,11 @@ Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec
 | `crates/core` | Noyau `ligrivsstore-core` : coffre, contrôle d'en-tête, dérivation, stockage, fusion, synchronisation, générateur |
 | `crates/cli` | Outil `lgs`, pour le développement, la recette et le diagnostic (ce n'est pas l'application) |
 | `crates/app` | Logique de l'application de bureau `ligrivsstore-app` : session, synchronisation, pilote (verrouillage automatique, échéances), réglages, messages et erreurs de l'interface (sans Tauri, testée avec le reste) |
-| `crates/win` | Intégration à Windows `ligrivsstore-win` : verrouillage de session, mise en veille, presse-papiers protégé ; seul paquet où du code `unsafe` est admis (décision 0011) |
+| `crates/win` | Intégration à Windows `ligrivsstore-win` : verrouillage de session, mise en veille, presse-papiers protégé, canal nommé, DPAPI ; seul paquet où du code `unsafe` est admis (décision 0011) |
+| `crates/protocol` | Protocole `ligrivsstore-protocol` entre l'extension et l'application : trames, messages, appairage, chiffrement (décision 0012) |
+| `crates/bridge` | Relais de messagerie native `ligrivsstore-pont`, lancé par Chrome et Edge |
 | `apps/windows` | Application Windows : interface Svelte (`src`), coquille Tauri (`src-tauri`), cadre d'isolation (`isolation`) |
+| `extension` | Extension Chrome et Edge (Manifest V3, TypeScript) : appairage, entrées du site ; essai de bout en bout sous Linux (`bout-en-bout`) |
 | `fuzz` | Cibles de tests aléatoires guidés (cargo-fuzz), lancées chaque semaine |
 | `scripts` | Banc WebDAV local (Apache derrière un relais HTTPS), tests du serveur et scénario de recette de bout en bout |
 | `server/coffre` | Fichiers du service « coffre » revus par la conversation « infra » (11 novembre 2026) : fiche de déploiement et configuration |
@@ -60,7 +63,27 @@ npm run tauri dev         # application en mode développement
 npm run tauri build       # installateur dans src-tauri\target\release\bundle\nsis
 ```
 
-L'intégration continue produit aussi l'installateur à chaque demande de fusion : fichier `ligrivsstore-installateur-windows` de l'exécution, conservé 30 jours. Il n'est pas encore signé : Windows SmartScreen avertit à l'installation.
+L'intégration continue produit aussi l'installateur à chaque demande de fusion : fichier `ligrivsstore-installateur-windows` de l'exécution, conservé 30 jours. Il n'est pas encore signé : Windows SmartScreen avertit à l'installation. Il installe aussi le relais `ligrivsstore-pont.exe` et le déclare à Chrome et à Edge.
+
+Avant `npm run tauri dev` ou `build`, le relais doit être copié là où Tauri l'attend (`bundle.externalBin`) :
+
+```powershell
+cargo build --release -p ligrivsstore-bridge
+New-Item -ItemType Directory -Force apps\windows\src-tauri\binaries
+Copy-Item target\release\ligrivsstore-pont.exe apps\windows\src-tauri\binaries\ligrivsstore-pont-x86_64-pc-windows-msvc.exe
+```
+
+### Extension Chrome et Edge
+
+```powershell
+cd extension
+npm ci
+npm run check             # types (TypeScript)
+npm test                  # protocole : vecteurs communs avec le paquet Rust
+npm run build             # extension dans extension\dist
+```
+
+Chargement en mode développeur : `chrome://extensions` (ou `edge://extensions`), « Mode développeur », « Charger l'extension non empaquetée », dossier `extension\dist`. Son identifiant, fixé par la clé de son manifeste, est `pbjfabapbnileccikicpifdnhkocnlbb`. L'intégration continue la produit aussi (`ligrivsstore-extension`).
 
 ## L'outil `lgs`
 
@@ -87,7 +110,7 @@ Fichier clé : `lgs keyfile cle.keyx` en crée un au format XML 2.0 de KeePass, 
 | Jalon | Contenu |
 |---|---|
 | J0 — Fondations | Noyau, outil de recette, tests, intégration continue (recetté) |
-| J1 — Windows et extension (**en cours**) | Application Tauri ; extension Chrome et Edge (messagerie native, appairage) ; correspondance des domaines ; phrases de passe ; enregistrement des nouveaux identifiants |
+| J1 — Windows et extension (**en cours**) | Application Tauri ; extension Chrome et Edge (messagerie native, appairage chiffré) ; correspondance des domaines ; phrases de passe ; remplissage ; enregistrement des nouveaux identifiants |
 | J2 — Android | Application Kotlin (liaisons UniFFI) ; service de remplissage ; biométrie |
 | J3 — Durcissement et bêta | Revue de sécurité interne ; conflits multi-terminaux ; bêta familiale |
 | Ensuite | iPhone et iPad, Mac et Safari (dès qu'un Mac est disponible) ; Firefox ; audit externe ; vente dans les stores |

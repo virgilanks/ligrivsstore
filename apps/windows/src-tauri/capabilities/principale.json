@@ -33,6 +33,12 @@
     "allow-generate-password",
     "allow-generate-passphrase",
     "allow-passphrase-strength",
+    "allow-list-browsers",
+    "allow-pending-pairings",
+    "allow-decide-pairing",
+    "allow-revoke-browser",
+    "allow-get-autostart",
+    "allow-set-autostart",
     "dialog:allow-open",
     "dialog:allow-save"
   ]

@@ -71,6 +71,7 @@
   const STATES: Record<SyncStatusView["state"], string> = {
     non_configuree: "Non réglée : ce coffre reste sur ce PC.",
     en_attente: "Première synchronisation imminente.",
+    a_envoyer: "Modifications enregistrées sur ce PC : envoi au serveur dans quelques secondes.",
     en_cours: "Échange en cours avec le serveur…",
     a_jour: "À jour.",
     hors_ligne: "Serveur injoignable : nouvel essai automatique dans quelques minutes.",

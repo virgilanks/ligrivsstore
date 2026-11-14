@@ -12,6 +12,8 @@
 //! - [`Monitor`] : état lisible par l'interface pendant que la session est
 //!   occupée ;
 //! - [`synchro`] : emplacement du coffre sur le serveur, bilan d'un échange ;
+//! - [`liaison`] et [`navigateurs`] : liaison chiffrée avec l'extension de
+//!   navigateur, appairage, navigateurs appairés ;
 //! - [`settings`] : dernier coffre ouvert, fichier clé, délais ;
 //! - [`dto`] : messages échangés avec l'interface (JSON) ;
 //! - [`AppError`] : erreurs à afficher, avec un code stable et un message en
@@ -34,7 +36,9 @@
 pub mod autopilot;
 pub mod dto;
 mod error;
+pub mod liaison;
 pub mod monitor;
+pub mod navigateurs;
 mod session;
 pub mod settings;
 mod strength;
