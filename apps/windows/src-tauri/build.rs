@@ -28,6 +28,12 @@ const COMMANDS: &[&str] = &[
     "generate_password",
     "generate_passphrase",
     "passphrase_strength",
+    "list_browsers",
+    "pending_pairings",
+    "decide_pairing",
+    "revoke_browser",
+    "get_autostart",
+    "set_autostart",
 ];
 
 fn main() {

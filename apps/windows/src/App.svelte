@@ -7,6 +7,7 @@
   import InstallFromServer from "./lib/InstallFromServer.svelte";
   import Unlock from "./lib/Unlock.svelte";
   import VaultView from "./lib/VaultView.svelte";
+  import PairingDialog from "./lib/PairingDialog.svelte";
 
   type Screen = "chargement" | "bienvenue" | "creation" | "installation" | "deverrouillage" | "coffre";
 
@@ -112,5 +113,10 @@
     />
   {:else if screen === "coffre" && status}
     <VaultView {status} {activity} onLocked={show} onStatus={(next) => (status = next)} />
+  {/if}
+  <!-- Demande d'appairage d'un navigateur : au-dessus de tout écran, coffre
+       verrouillé ou non. -->
+  {#if activity && activity.pairingRequests > 0}
+    <PairingDialog count={activity.pairingRequests} />
   {/if}
 </main>

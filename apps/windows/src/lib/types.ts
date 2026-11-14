@@ -106,6 +106,25 @@ export interface Activity {
   lockMessage: string | null;
   revision: number;
   sync: SyncStatusView;
+  /** Demandes d'appairage d'un navigateur en attente de décision. */
+  pairingRequests: number;
+}
+
+/** Navigateur appairé. */
+export interface BrowserView {
+  id: string;
+  browser: string;
+  fingerprint: string;
+  paired: string;
+  lastSeen: string | null;
+}
+
+/** Demande d'appairage en attente. */
+export interface PairingRequestView {
+  id: string;
+  browser: string;
+  fingerprint: string;
+  secondsLeft: number;
 }
 
 export interface SyncSettingsView {

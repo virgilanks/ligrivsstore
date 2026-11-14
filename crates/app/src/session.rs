@@ -368,6 +368,50 @@ impl Session {
         Ok(id)
     }
 
+    /// Entrées qui correspondent à la page ouverte dans le navigateur, de la
+    /// plus proche à la plus éloignée, sans mot de passe (correspondance des
+    /// domaines du noyau). Les entrées réservées à l'application et les
+    /// entrées sans adresse ne sont jamais proposées.
+    pub fn site_entries(
+        &self,
+        page_url: &str,
+    ) -> Result<Vec<ligrivsstore_protocol::SiteEntry>, AppError> {
+        use ligrivsstore_core::{PageOrigin, Proximity};
+        use ligrivsstore_protocol::Proximity as Sent;
+        let vault = self.local()?.vault();
+        let Some(page) = PageOrigin::parse(page_url) else {
+            return Ok(Vec::new());
+        };
+        let mut found: Vec<(Proximity, ligrivsstore_protocol::SiteEntry)> = vault
+            .entries()
+            .into_iter()
+            .filter(|entry| entry.role.is_none())
+            .filter_map(|entry| {
+                let site = page.matches(&entry.url)?;
+                let proximity = match site.proximity {
+                    Proximity::SameOrigin => Sent::SameOrigin,
+                    Proximity::SameHost => Sent::SameHost,
+                    Proximity::Subdomain => Sent::Subdomain,
+                };
+                Some((
+                    site.proximity,
+                    ligrivsstore_protocol::SiteEntry {
+                        id: entry.id,
+                        title: entry.title,
+                        username: entry.username,
+                        proximity,
+                        insecure: site.insecure,
+                    },
+                ))
+            })
+            .collect();
+        found.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.1.title.to_lowercase().cmp(&b.1.title.to_lowercase()))
+        });
+        Ok(found.into_iter().map(|(_, entry)| entry).collect())
+    }
+
     /// Supprime une entrée, puis enregistre le coffre.
     pub fn delete_entry(&mut self, id: &str) -> Result<(), AppError> {
         self.ordinary(id)?;
@@ -1259,6 +1303,72 @@ mod tests {
             .unwrap();
         assert!(matches!(f.session.sync_now(), SyncOutcome::Suspended(_)));
         assert_eq!(server.requests(), 2);
+    }
+
+    #[test]
+    fn site_entries_follow_domain_matching_without_secrets() {
+        let mut f = Fixture::new();
+        assert_eq!(
+            f.session
+                .site_entries("https://www.banque.fr")
+                .unwrap_err()
+                .code,
+            "verrouille"
+        );
+        f.create(KeyfileChoice::None);
+        let add = |s: &mut Session, title: &str, url: &str| {
+            s.save_entry(SaveEntryRequest {
+                id: None,
+                title: title.into(),
+                url: url.into(),
+                username: format!("{title}-id"),
+                password: Some("secret".into()),
+                notes: String::new(),
+            })
+            .unwrap()
+        };
+        add(
+            &mut f.session,
+            "Zèbre (sous-domaine)",
+            "https://client.banque.fr",
+        );
+        add(&mut f.session, "Banque", "https://www.banque.fr/connexion");
+        add(&mut f.session, "Banque port", "https://www.banque.fr:8443");
+        add(
+            &mut f.session,
+            "Hameçon",
+            "https://banque-fr.secure-login.com",
+        );
+        add(&mut f.session, "Sans adresse", "");
+        // L'entrée réservée n'est jamais proposée, même si son adresse
+        // correspond à la page.
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", closed.local_addr().unwrap());
+        drop(closed);
+        f.session
+            .configure_sync(sync_request(&address, Some("mdp")))
+            .unwrap();
+        let reserved_page = format!("{address}/dav/hermann/coffre.kdbx");
+        assert!(f.session.site_entries(&reserved_page).unwrap().is_empty());
+
+        let found = f
+            .session
+            .site_entries("https://www.banque.fr/espace")
+            .unwrap();
+        let titles: Vec<&str> = found.iter().map(|e| e.title.as_str()).collect();
+        assert_eq!(titles, ["Banque", "Banque port", "Zèbre (sous-domaine)"]);
+        use ligrivsstore_protocol::Proximity as P;
+        let proximities: Vec<P> = found.iter().map(|e| e.proximity).collect();
+        assert_eq!(proximities, [P::SameOrigin, P::SameHost, P::Subdomain]);
+        assert_eq!(found[0].username, "Banque-id");
+        assert!(found.iter().all(|e| !e.insecure));
+        // Pages du navigateur : rien.
+        assert!(
+            f.session
+                .site_entries("chrome://settings")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

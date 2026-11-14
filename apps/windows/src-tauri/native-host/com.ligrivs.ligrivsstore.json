@@ -1,0 +1,9 @@
+{
+  "name": "com.ligrivs.ligrivsstore",
+  "description": "ligrivsstore : relais entre l'extension et l'application",
+  "path": "ligrivsstore-pont.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://pbjfabapbnileccikicpifdnhkocnlbb/"
+  ]
+}

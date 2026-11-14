@@ -19,7 +19,8 @@
         "height": 720,
         "minWidth": 760,
         "minHeight": 540,
-        "center": true
+        "center": true,
+        "visible": false
       }
     ],
     "security": {
@@ -34,7 +35,9 @@
         "form-action": "'none'"
       },
       "freezePrototype": true,
-      "capabilities": ["principale"],
+      "capabilities": [
+        "principale"
+      ],
       "pattern": {
         "use": "isolation",
         "options": {
@@ -45,7 +48,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "ligrivs",
     "copyright": "© 2026 ligrivs",
     "category": "Utility",
@@ -63,9 +68,18 @@
       },
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["French"],
-        "displayLanguageSelector": false
+        "languages": [
+          "French"
+        ],
+        "displayLanguageSelector": false,
+        "installerHooks": "windows/hooks.nsh"
       }
+    },
+    "externalBin": [
+      "binaries/ligrivsstore-pont"
+    ],
+    "resources": {
+      "native-host/com.ligrivs.ligrivsstore.json": "com.ligrivs.ligrivsstore.json"
     }
   }
 }

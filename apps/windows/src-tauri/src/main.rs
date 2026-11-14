@@ -7,6 +7,12 @@
 //! Un fil « pilote » interroge chaque seconde l'[`Autopilot`] et exécute ce
 //! qu'il demande : verrouillage (inactivité, session Windows verrouillée,
 //! mise en veille), synchronisation, effacement du presse-papiers.
+//!
+//! L'application ouvre aussi le canal nommé où le relais `ligrivsstore-pont`
+//! la rejoint pour l'extension de navigateur (liaison chiffrée, appairage),
+//! et vit dans la zone de notification : fermer la fenêtre la cache, le menu
+//! de l'icône la quitte. Lancée avec `--arriere-plan` (par le relais, ou au
+//! démarrage de Windows), elle démarre cachée.
 
 // Pas de console sous Windows dans les versions distribuées.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -17,19 +23,65 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime};
 
 use ligrivsstore_app::dto::{
-    Activity, BackupView, CopyField, CreateVaultRequest, DefaultPaths, EntryRow, EntryView,
-    Generated, GeneratorOptions, InstallRequest, OpenVaultRequest, PassphraseOptions, Preferences,
-    RestoreView, SaveEntryRequest, Status, Strength, SyncSettingsRequest, SyncSettingsView,
+    Activity, BackupView, BrowserView, CopyField, CreateVaultRequest, DefaultPaths, EntryRow,
+    EntryView, Generated, GeneratorOptions, InstallRequest, OpenVaultRequest, PairingRequestView,
+    PassphraseOptions, Preferences, RestoreView, SaveEntryRequest, Status, Strength,
+    SyncSettingsRequest, SyncSettingsView,
 };
+use ligrivsstore_app::liaison::{self, Backend, Link};
+use ligrivsstore_app::navigateurs::Browsers;
 use ligrivsstore_app::{Action, AppError, Autopilot, LockReason, Monitor, Session};
+use ligrivsstore_protocol::SiteEntry;
+use ligrivsstore_win::canal::ChannelName;
 use ligrivsstore_win::{SystemEvent, clipboard};
-use tauri::{Manager, State};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_autostart::ManagerExt;
+
+/// Argument de démarrage caché, dans la zone de notification.
+const BACKGROUND_ARGUMENT: &str = "--arriere-plan";
 
 /// État partagé entre les commandes et le pilote.
 struct AppState {
     session: Arc<Mutex<Session>>,
     pilot: Arc<Mutex<Autopilot>>,
     monitor: Arc<Monitor>,
+    browsers: Arc<Browsers>,
+}
+
+/// Montre la fenêtre principale, au premier plan.
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Ce que la liaison avec l'extension demande à l'application.
+struct ShellBackend {
+    session: Arc<Mutex<Session>>,
+    monitor: Arc<Monitor>,
+    app: AppHandle,
+}
+
+impl Backend for ShellBackend {
+    fn is_unlocked(&self) -> bool {
+        self.monitor.is_unlocked()
+    }
+
+    fn site_entries(&self, page_url: &str) -> Result<Vec<SiteEntry>, AppError> {
+        guard(&self.session).site_entries(page_url)
+    }
+
+    fn show(&self) {
+        show_main(&self.app);
+    }
+
+    fn pairing_requested(&self) {
+        show_main(&self.app);
+    }
 }
 
 /// Verrou, même si un fil a paniqué en le tenant : l'état reste cohérent
@@ -91,7 +143,58 @@ async fn status(state: State<'_, AppState>) -> Result<Status, AppError> {
 /// une activité et n'attend jamais la session.
 #[tauri::command]
 fn activity(state: State<'_, AppState>) -> Activity {
-    state.monitor.activity()
+    let mut activity = state.monitor.activity();
+    activity.pairing_requests = state.browsers.pending_count();
+    activity
+}
+
+/// Navigateurs appairés.
+#[tauri::command]
+fn list_browsers(state: State<'_, AppState>) -> Vec<BrowserView> {
+    state.browsers.list()
+}
+
+/// Demandes d'appairage en attente de décision.
+#[tauri::command]
+fn pending_pairings(state: State<'_, AppState>) -> Vec<PairingRequestView> {
+    state.browsers.pending()
+}
+
+/// Confirme ou refuse une demande d'appairage.
+#[tauri::command]
+fn decide_pairing(state: State<'_, AppState>, id: String, confirm: bool) -> Result<(), AppError> {
+    guard(&state.pilot).on_activity(Instant::now());
+    state.browsers.decide(&id, confirm)
+}
+
+/// Révoque un navigateur appairé.
+#[tauri::command]
+fn revoke_browser(state: State<'_, AppState>, id: String) -> Result<(), AppError> {
+    guard(&state.pilot).on_activity(Instant::now());
+    state.browsers.revoke(&id)
+}
+
+/// Démarrage avec Windows (caché, dans la zone de notification).
+#[tauri::command]
+fn get_autostart(app: AppHandle) -> Result<bool, AppError> {
+    app.autolaunch()
+        .is_enabled()
+        .map_err(|e| AppError::new("demarrage", e.to_string()))
+}
+
+/// Active ou retire le démarrage avec Windows ; renvoie l'état obtenu.
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, AppError> {
+    let launcher = app.autolaunch();
+    let outcome = if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    outcome.map_err(|e| AppError::new("demarrage", e.to_string()))?;
+    launcher
+        .is_enabled()
+        .map_err(|e| AppError::new("demarrage", e.to_string()))
 }
 
 /// Activité de l'utilisateur dans la fenêtre (frappe, clic), qui repousse le
@@ -343,17 +446,120 @@ fn run_autopilot(
     }
 }
 
+/// Ouvre la liaison avec l'extension : clé de l'application, registre des
+/// navigateurs, canal nommé du compte.
+fn start_link(
+    config_dir: &std::path::Path,
+    browsers: &Arc<Browsers>,
+    backend: Arc<dyn Backend>,
+) -> Result<(), AppError> {
+    let (identity, renewed) = liaison::load_identity(config_dir)?;
+    if renewed {
+        // Clé illisible, remplacée : les anciens appairages ne servent plus.
+        browsers.forget_all()?;
+    }
+    let name = ChannelName::for_current_user().map_err(AppError::internal)?;
+    let link = Link::new(identity, Arc::clone(browsers), backend);
+    liaison::spawn_server(&name, Arc::new(link))
+}
+
+/// Déclare le relais auprès de Chrome et d'Edge pour l'utilisateur courant,
+/// si le manifeste installé avec l'application est là (pas en développement).
+#[cfg(windows)]
+fn register_native_host(app: &AppHandle) -> Result<(), String> {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
+    let manifest = app
+        .path()
+        .resource_dir()
+        .map_err(|e| e.to_string())?
+        .join(format!("{}.json", ligrivsstore_protocol::HOST_NAME));
+    if !manifest.is_file() {
+        return Err(format!("manifeste absent : {}", manifest.display()));
+    }
+    let manifest = manifest.display().to_string();
+    let user = RegKey::predef(HKEY_CURRENT_USER);
+    for browser in [r"Software\Google\Chrome", r"Software\Microsoft\Edge"] {
+        let path = format!(
+            r"{browser}\NativeMessagingHosts\{}",
+            ligrivsstore_protocol::HOST_NAME
+        );
+        let (key, _) = user.create_subkey(&path).map_err(|e| e.to_string())?;
+        let current: Option<String> = key.get_value("").ok();
+        if current.as_deref() != Some(manifest.as_str()) {
+            key.set_value("", &manifest).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Icône de la zone de notification : ouvrir, verrouiller, quitter.
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "ouvrir", "Ouvrir ligrivsstore", true, None::<&str>)?;
+    let lock = MenuItem::with_id(
+        app,
+        "verrouiller",
+        "Verrouiller le coffre",
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(app, "quitter", "Quitter", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &lock, &quit])?;
+    let mut builder = TrayIconBuilder::with_id("principale")
+        .tooltip("ligrivsstore")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "ouvrir" => show_main(app),
+            "verrouiller" => lock_from_tray(app),
+            "quitter" => {
+                lock_from_tray(app);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
+fn lock_from_tray(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    guard(&state.session).lock(LockReason::Manual);
+    guard(&state.pilot).on_locked();
+}
+
 fn main() {
     let outcome = tauri::Builder::default()
         // Une seule instance : un second lancement ramène la fenêtre existante.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            show_main(app);
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![BACKGROUND_ARGUMENT]),
+        ))
+        // Fermer la fenêtre la cache : l'application reste dans la zone de
+        // notification pour l'extension. « Quitter » est dans son menu.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
             let session = Session::load(&config_dir);
@@ -375,11 +581,30 @@ fn main() {
                 .name("ligrivsstore-pilote".into())
                 .spawn(move || run_autopilot(s, p, events))?;
 
+            let browsers = Arc::new(Browsers::load(&config_dir));
+            let backend = Arc::new(ShellBackend {
+                session: Arc::clone(&session),
+                monitor: Arc::clone(&monitor),
+                app: app.handle().clone(),
+            });
+            if let Err(error) = start_link(&config_dir, &browsers, backend) {
+                eprintln!("liaison avec les navigateurs indisponible : {error}");
+            }
+            #[cfg(windows)]
+            if let Err(error) = register_native_host(app.handle()) {
+                eprintln!("relais non déclaré aux navigateurs : {error}");
+            }
+
             app.manage(AppState {
                 session,
                 pilot,
                 monitor,
+                browsers,
             });
+            build_tray(app)?;
+            if !std::env::args().any(|arg| arg == BACKGROUND_ARGUMENT) {
+                show_main(app.handle());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -409,6 +634,12 @@ fn main() {
             generate_password,
             generate_passphrase,
             passphrase_strength,
+            list_browsers,
+            pending_pairings,
+            decide_pairing,
+            revoke_browser,
+            get_autostart,
+            set_autostart,
         ])
         .run(tauri::generate_context!());
     if let Err(error) = outcome {

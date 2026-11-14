@@ -113,6 +113,8 @@ impl Monitor {
             lock_message: s.lock_reason.map(|r| r.message(s.lock_minutes)),
             revision: s.revision,
             sync: sync_view(s),
+            // Complété par la coquille, qui tient le registre des navigateurs.
+            pairing_requests: 0,
         })
     }
 }

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api, messageOf } from "./api";
   import BackupsPanel from "./BackupsPanel.svelte";
+  import BrowsersPanel from "./BrowsersPanel.svelte";
   import EntryDetail from "./EntryDetail.svelte";
   import EntryEditor from "./EntryEditor.svelte";
   import SettingsPanel from "./SettingsPanel.svelte";
@@ -17,7 +18,7 @@
   }
   let { status, activity, onLocked, onStatus }: Props = $props();
 
-  type Tab = "entrees" | "synchronisation" | "sauvegardes" | "reglages";
+  type Tab = "entrees" | "synchronisation" | "sauvegardes" | "navigateurs" | "reglages";
   type Mode = "vide" | "fiche" | "modification" | "creation";
 
   let tab = $state<Tab>("entrees");
@@ -145,6 +146,7 @@
     <button type="button" class:current={tab === "entrees"} aria-current={tab === "entrees" ? "page" : undefined} onclick={() => (tab = "entrees")}>Entrées</button>
     <button type="button" class:current={tab === "synchronisation"} aria-current={tab === "synchronisation" ? "page" : undefined} onclick={() => (tab = "synchronisation")}>Synchronisation</button>
     <button type="button" class:current={tab === "sauvegardes"} aria-current={tab === "sauvegardes" ? "page" : undefined} onclick={() => (tab = "sauvegardes")}>Sauvegardes</button>
+    <button type="button" class:current={tab === "navigateurs"} aria-current={tab === "navigateurs" ? "page" : undefined} onclick={() => (tab = "navigateurs")}>Navigateurs</button>
     <button type="button" class:current={tab === "reglages"} aria-current={tab === "reglages" ? "page" : undefined} onclick={() => (tab = "reglages")}>Réglages</button>
   </nav>
 
@@ -197,6 +199,10 @@
         <SyncPanel sync={activity?.sync ?? null} />
       {:else if tab === "sauvegardes"}
         <BackupsPanel onRestored={refresh} />
+      {:else if tab === "navigateurs"}
+        {#key activity?.pairingRequests}
+          <BrowsersPanel />
+        {/key}
       {:else}
         <SettingsPanel />
       {/if}

@@ -12,6 +12,8 @@ repository.workspace = true
 [dependencies]
 ligrivsstore-core.workspace = true
 ligrivsstore-win.workspace = true
+ligrivsstore-protocol.workspace = true
+getrandom.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true

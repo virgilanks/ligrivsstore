@@ -24,11 +24,18 @@ tauri-build = { version = "=2.7.4", features = ["isolation"] }
 [dependencies]
 ligrivsstore-app = { path = "../../../crates/app", version = "0.1.0" }
 ligrivsstore-win = { path = "../../../crates/win", version = "0.1.0" }
-tauri = { version = "=2.12.5", features = ["isolation"] }
+ligrivsstore-protocol = { path = "../../../crates/protocol", version = "0.1.0" }
+tauri = { version = "=2.12.5", features = ["isolation", "tray-icon"] }
+tauri-plugin-autostart = "=2.7.0"
 tauri-plugin-dialog = "=2.8.4"
 tauri-plugin-single-instance = "=2.5.5"
 serde = { version = "1.0.229", features = ["derive"] }
 zeroize = "1.9.1"
+
+# Déclaration du relais auprès de Chrome et d'Edge (clés de registre de
+# l'utilisateur), sans code `unsafe`.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56.0"
 
 [lints.rust]
 unsafe_code = "forbid"

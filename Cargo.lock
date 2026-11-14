@@ -1050,7 +1050,9 @@ name = "ligrivsstore-app"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "getrandom 0.4.3",
  "ligrivsstore-core",
+ "ligrivsstore-protocol",
  "ligrivsstore-win",
  "serde",
  "serde_json",
