@@ -154,7 +154,7 @@ jobs:
         run: npm audit --audit-level=moderate
       - name: Vérification des types (TypeScript)
         run: npm run check
-      - name: Protocole : vecteurs communs avec le paquet Rust, rejeu, altération
+      - name: Protocole (vecteurs communs avec le paquet Rust, rejeu, altération)
         run: npm test
       - name: Construction
         run: npm run build
