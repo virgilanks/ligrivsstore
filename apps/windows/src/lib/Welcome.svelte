@@ -4,9 +4,10 @@
 
   interface Props {
     onCreate: () => void;
+    onInstall: () => void;
     onOpen: (path: string) => void;
   }
-  let { onCreate, onOpen }: Props = $props();
+  let { onCreate, onInstall, onOpen }: Props = $props();
   let failure = $state<string | null>(null);
 
   async function openExisting() {
@@ -26,7 +27,12 @@
   <div class="choices">
     <button type="button" class="primary" onclick={onCreate}>Créer un coffre</button>
     <button type="button" onclick={openExisting}>Ouvrir un coffre existant…</button>
+    <button type="button" onclick={onInstall}>Installer le coffre du serveur…</button>
   </div>
+  <p class="muted small">
+    Votre coffre est déjà synchronisé depuis un autre PC ? Installez-le depuis le serveur : il vous faut le
+    compte et le mot de passe du serveur, la phrase de passe du coffre et une copie de son fichier clé.
+  </p>
   <p class="muted small">
     Les coffres sont au format ouvert KDBX : KeePassXC, KeePassDX et KeePassium savent aussi les lire.
   </p>

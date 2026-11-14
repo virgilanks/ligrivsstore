@@ -1,9 +1,15 @@
-//! Générateur de mots de passe.
+//! Générateur de mots de passe et de phrases de passe.
 //!
-//! Chaque caractère est tiré par le générateur aléatoire du système
-//! d'exploitation, par tirage avec rejet (aucun biais de modulo). Le mot de
-//! passe contient au moins un caractère de chaque famille demandée, puis est
-//! mélangé (Fisher-Yates).
+//! Chaque caractère ou mot est tiré par le générateur aléatoire du système
+//! d'exploitation, par tirage avec rejet (aucun biais de modulo).
+//!
+//! - Mot de passe : au moins un caractère de chaque famille demandée, puis
+//!   mélange (Fisher-Yates).
+//! - Phrase de passe : mots de la liste longue de l'EFF (7 776 mots, soit
+//!   12,9 bits par mot), séparés par un caractère au choix (décision D8 ; voir
+//!   `data/LISEZMOI.md` pour l'origine et la licence de la liste).
+
+use std::sync::OnceLock;
 
 use zeroize::Zeroizing;
 
@@ -22,6 +28,18 @@ const AMBIGUOUS: &[u8] = b"Il1O0o|";
 pub const MIN_LENGTH: usize = 8;
 /// Longueur maximale.
 pub const MAX_LENGTH: usize = 128;
+
+/// Liste longue de l'EFF (2016), telle que publiée : cinq chiffres de dé, une
+/// tabulation, le mot.
+const EFF_LARGE_WORDLIST: &str = include_str!("../data/eff_large_wordlist.txt");
+/// Nombre de mots de la liste (6⁵).
+pub const WORDLIST_LEN: usize = 7_776;
+/// Nombre minimal de mots d'une phrase de passe.
+pub const MIN_WORDS: usize = 4;
+/// Nombre maximal de mots d'une phrase de passe.
+pub const MAX_WORDS: usize = 12;
+/// Séparateurs admis entre les mots.
+pub const SEPARATORS: [char; 4] = ['-', ' ', '.', '_'];
 
 /// Règles de génération.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +100,109 @@ impl PasswordPolicy {
         let bits = self.length as f64 * (alphabet as f64).log2();
         bits
     }
+}
+
+/// Règles de génération d'une phrase de passe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PassphrasePolicy {
+    /// Nombre de mots.
+    pub words: usize,
+    /// Séparateur, parmi [`SEPARATORS`].
+    pub separator: char,
+    /// Initiale de chaque mot en majuscule (n'ajoute pas d'entropie).
+    pub capitalize: bool,
+    /// Un chiffre au hasard, accolé à un mot pris au hasard (certains sites
+    /// exigent un chiffre).
+    pub digit: bool,
+}
+
+impl Default for PassphrasePolicy {
+    fn default() -> Self {
+        Self {
+            words: 6,
+            separator: '-',
+            capitalize: false,
+            digit: false,
+        }
+    }
+}
+
+impl PassphrasePolicy {
+    /// Entropie, en bits : nombre de mots × log2(7 776), plus log2(10 × nombre
+    /// de mots) pour le chiffre (sa valeur et le mot qui le porte).
+    pub fn entropy_bits(&self) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        let words = self.words as f64;
+        #[allow(clippy::cast_precision_loss)]
+        let per_word = (WORDLIST_LEN as f64).log2();
+        let digit = if self.digit && self.words > 0 {
+            (10.0 * words).log2()
+        } else {
+            0.0
+        };
+        words * per_word + digit
+    }
+}
+
+/// Mots de la liste de l'EFF, dans l'ordre de publication.
+pub fn wordlist() -> Result<&'static [&'static str]> {
+    static WORDS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    let words = WORDS.get_or_init(|| {
+        EFF_LARGE_WORDLIST
+            .lines()
+            .filter_map(|line| line.split_once('\t').map(|(_, word)| word))
+            .collect()
+    });
+    if words.len() == WORDLIST_LEN {
+        Ok(words)
+    } else {
+        Err(Error::InvalidInput("liste de mots altérée".into()))
+    }
+}
+
+/// Génère une phrase de passe selon `policy`.
+pub fn generate_passphrase(policy: &PassphrasePolicy) -> Result<Zeroizing<String>> {
+    if !(MIN_WORDS..=MAX_WORDS).contains(&policy.words) {
+        return Err(Error::InvalidInput(format!(
+            "{} mots (acceptés : {MIN_WORDS} à {MAX_WORDS})",
+            policy.words
+        )));
+    }
+    if !SEPARATORS.contains(&policy.separator) {
+        return Err(Error::InvalidInput(
+            "séparateur refusé : tiret, espace, point ou soulignement".into(),
+        ));
+    }
+    let list = wordlist()?;
+    let digit = if policy.digit {
+        let position = uniform(policy.words)?;
+        let value = u32::try_from(uniform(10)?).map_err(|_| Error::Random)?;
+        Some((position, char::from_digit(value, 10).ok_or(Error::Random)?))
+    } else {
+        None
+    };
+    let mut phrase = Zeroizing::new(String::with_capacity(policy.words * 10));
+    for index in 0..policy.words {
+        if index > 0 {
+            phrase.push(policy.separator);
+        }
+        let word = list.get(uniform(list.len())?).ok_or(Error::Random)?;
+        let mut chars = word.chars();
+        if policy.capitalize
+            && let Some(first) = chars.next()
+        {
+            phrase.extend(first.to_uppercase());
+            phrase.push_str(chars.as_str());
+        } else {
+            phrase.push_str(word);
+        }
+        if let Some((position, value)) = digit
+            && position == index
+        {
+            phrase.push(value);
+        }
+    }
+    Ok(phrase)
 }
 
 /// Génère un mot de passe selon `policy`.
@@ -207,5 +328,94 @@ mod tests {
     fn entropy_of_default_policy() {
         let bits = PasswordPolicy::default().entropy_bits();
         assert!(bits > 120.0, "{bits}");
+    }
+
+    #[test]
+    fn embedded_wordlist_is_the_published_eff_list() {
+        use sha2::{Digest, Sha256};
+        // Empreinte du fichier publié par l'EFF
+        // (https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt).
+        assert_eq!(
+            hex::encode(Sha256::digest(EFF_LARGE_WORDLIST.as_bytes())),
+            "addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e"
+        );
+        let words = wordlist().unwrap();
+        assert_eq!(words.len(), WORDLIST_LEN);
+        let unique: std::collections::BTreeSet<_> = words.iter().collect();
+        assert_eq!(unique.len(), WORDLIST_LEN);
+        assert!(
+            words.iter().all(|w| (3..=9).contains(&w.len())
+                && w.chars().all(|c| c.is_ascii_lowercase() || c == '-'))
+        );
+        assert_eq!(words.first(), Some(&"abacus"));
+        assert_eq!(words.last(), Some(&"zoom"));
+    }
+
+    #[test]
+    fn passphrases_follow_the_policy() {
+        let list = wordlist().unwrap();
+        for words in [MIN_WORDS, 6, MAX_WORDS] {
+            for capitalize in [false, true] {
+                for digit in [false, true] {
+                    let policy = PassphrasePolicy {
+                        words,
+                        separator: ' ',
+                        capitalize,
+                        digit,
+                    };
+                    let phrase = generate_passphrase(&policy).unwrap();
+                    let parts: Vec<&str> = phrase.split(' ').collect();
+                    assert_eq!(parts.len(), words, "{}", phrase.as_str());
+                    let digits = phrase.chars().filter(char::is_ascii_digit).count();
+                    assert_eq!(digits, usize::from(digit));
+                    for part in parts {
+                        let bare: String = part
+                            .chars()
+                            .filter(|c| !c.is_ascii_digit())
+                            .collect::<String>()
+                            .to_lowercase();
+                        assert!(list.contains(&bare.as_str()), "{part}");
+                        let first = part.chars().next().unwrap();
+                        assert_eq!(first.is_ascii_uppercase(), capitalize, "{part}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn passphrase_entropy() {
+        let six = PassphrasePolicy::default().entropy_bits();
+        assert!((77.5..77.6).contains(&six), "{six}");
+        let with_digit = PassphrasePolicy {
+            digit: true,
+            ..PassphrasePolicy::default()
+        }
+        .entropy_bits();
+        assert!((83.4..83.5).contains(&with_digit), "{with_digit}");
+    }
+
+    #[test]
+    fn refuses_invalid_passphrase_policies() {
+        for words in [0, MIN_WORDS - 1, MAX_WORDS + 1] {
+            let policy = PassphrasePolicy {
+                words,
+                ..PassphrasePolicy::default()
+            };
+            assert!(generate_passphrase(&policy).is_err());
+        }
+        let letter = PassphrasePolicy {
+            separator: 'a',
+            ..PassphrasePolicy::default()
+        };
+        assert!(generate_passphrase(&letter).is_err());
+    }
+
+    #[test]
+    fn passphrases_differ() {
+        let policy = PassphrasePolicy::default();
+        let a = generate_passphrase(&policy).unwrap();
+        let b = generate_passphrase(&policy).unwrap();
+        assert_ne!(a.as_str(), b.as_str());
     }
 }

@@ -235,6 +235,10 @@ pub struct SyncState {
     /// Date du dernier refus d'identifiants (UTC, ISO 8601) : tant qu'elle est
     /// présente, la synchronisation est suspendue.
     pub credentials_rejected_utc: Option<String>,
+    /// Empreinte SHA-256 du dernier fichier local écrit par le noyau. À
+    /// l'ouverture, elle dit si le fichier est bien le sien, et donc s'il peut
+    /// être envoyé tel quel.
+    pub last_written_sha256: Option<String>,
 }
 
 impl SyncState {
@@ -263,6 +267,39 @@ impl SyncState {
     }
 }
 
+/// Réglages d'un accès WebDAV.
+#[derive(Clone, PartialEq, Eq)]
+pub struct TransportOptions {
+    /// Délai d'établissement de la connexion.
+    pub connect_timeout: Duration,
+    /// Durée maximale d'un échange complet (envoi ou téléchargement).
+    pub request_timeout: Duration,
+    /// Autorité de certification seule reconnue (PEM) : banc d'essai, ou
+    /// serveur doté d'une autorité privée. Sans elle, seules les autorités
+    /// publiques le sont.
+    pub root_ca_pem: Option<Vec<u8>>,
+}
+
+impl Default for TransportOptions {
+    fn default() -> Self {
+        Self {
+            connect_timeout: Duration::from_secs(15),
+            request_timeout: Duration::from_secs(120),
+            root_ca_pem: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for TransportOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TransportOptions")
+            .field("connect_timeout", &self.connect_timeout)
+            .field("request_timeout", &self.request_timeout)
+            .field("root_ca_pem", &self.root_ca_pem.as_ref().map(Vec::len))
+            .finish()
+    }
+}
+
 /// Accès WebDAV au serveur « coffre ».
 pub struct WebDavTransport {
     agent: ureq::Agent,
@@ -287,7 +324,26 @@ impl WebDavTransport {
     /// locale (bancs de test). Les identifiants ne doivent pas figurer dans
     /// l'adresse.
     pub fn new(url: &str, username: &str, password: &str) -> Result<Self, SyncError> {
-        Self::build(url, username, password, None)
+        Self::with_options(url, username, password, &TransportOptions::default())
+    }
+
+    /// Comme [`WebDavTransport::new`], avec des délais et une autorité de
+    /// certification choisis.
+    pub fn with_options(
+        url: &str,
+        username: &str,
+        password: &str,
+        options: &TransportOptions,
+    ) -> Result<Self, SyncError> {
+        let roots = match &options.root_ca_pem {
+            Some(pem) => {
+                let certificate = ureq::tls::Certificate::from_pem(pem)
+                    .map_err(|e| SyncError::InvalidCertificate(e.to_string()))?;
+                Some(ureq::tls::RootCerts::new_with_certs(&[certificate]))
+            }
+            None => None,
+        };
+        Self::build(url, username, password, roots, options)
     }
 
     /// Comme [`WebDavTransport::new`], mais ne fait confiance qu'à l'autorité de
@@ -299,14 +355,11 @@ impl WebDavTransport {
         password: &str,
         ca_pem: &[u8],
     ) -> Result<Self, SyncError> {
-        let certificate = ureq::tls::Certificate::from_pem(ca_pem)
-            .map_err(|e| SyncError::InvalidCertificate(e.to_string()))?;
-        Self::build(
-            url,
-            username,
-            password,
-            Some(ureq::tls::RootCerts::new_with_certs(&[certificate])),
-        )
+        let options = TransportOptions {
+            root_ca_pem: Some(ca_pem.to_vec()),
+            ..TransportOptions::default()
+        };
+        Self::with_options(url, username, password, &options)
     }
 
     fn build(
@@ -314,6 +367,7 @@ impl WebDavTransport {
         username: &str,
         password: &str,
         roots: Option<ureq::tls::RootCerts>,
+        options: &TransportOptions,
     ) -> Result<Self, SyncError> {
         let parsed = Url::parse(url).map_err(|e| SyncError::InvalidUrl(e.to_string()))?;
         match parsed.scheme() {
@@ -343,8 +397,8 @@ impl WebDavTransport {
         let config = builder
             .http_status_as_error(false)
             .max_redirects(0)
-            .timeout_connect(Some(Duration::from_secs(15)))
-            .timeout_global(Some(Duration::from_secs(120)))
+            .timeout_connect(Some(options.connect_timeout))
+            .timeout_global(Some(options.request_timeout))
             .user_agent(concat!("ligrivsstore/", env!("CARGO_PKG_VERSION")))
             .build();
         let credentials = Zeroizing::new(format!("{username}:{password}"));
@@ -560,6 +614,7 @@ mod tests {
             last_uploaded_sha256: None,
             last_sync_utc: Some("2026-11-11T10:00:00Z".into()),
             credentials_rejected_utc: None,
+            last_written_sha256: Some("ab".repeat(32)),
         };
         state.save(&path).unwrap();
         assert_eq!(SyncState::load(&path), state);
@@ -578,6 +633,8 @@ mod tests {
         assert_eq!(state.remote_etag.as_deref(), Some("\"abc\""));
         assert!(!state.local_dirty);
         assert!(state.credentials_rejected_utc.is_none());
+        // Sans empreinte, le fichier sera réécrit avant le prochain envoi.
+        assert!(state.last_written_sha256.is_none());
     }
 
     #[test]

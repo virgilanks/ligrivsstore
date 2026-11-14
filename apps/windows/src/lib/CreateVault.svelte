@@ -23,6 +23,26 @@
   let existingKeyfilePath = $state("");
   let busy = $state(false);
   let failure = $state<string | null>(null);
+  let suggestion = $state<string | null>(null);
+  let showPassphrase = $state(false);
+
+  async function suggest() {
+    failure = null;
+    try {
+      const generated = await api.generatePassphrase({ words: 6, separator: "-", capitalize: false, digit: false });
+      suggestion = generated.password;
+    } catch (error) {
+      failure = messageOf(error);
+    }
+  }
+
+  function useSuggestion() {
+    if (!suggestion) return;
+    passphrase = suggestion;
+    confirmation = suggestion;
+    showPassphrase = true;
+    suggestion = null;
+  }
 
   let mismatch = $derived(confirmation !== "" && confirmation !== passphrase);
   let keyfileReady = $derived(
@@ -129,7 +149,31 @@
     </div>
 
     <label for="phrase">Phrase de passe</label>
-    <input id="phrase" type="password" autocomplete="new-password" bind:value={passphrase} disabled={busy} />
+    <div class="row">
+      <input
+        id="phrase"
+        type={showPassphrase ? "text" : "password"}
+        autocomplete="new-password"
+        spellcheck="false"
+        bind:value={passphrase}
+        disabled={busy}
+      />
+      <button type="button" onclick={() => (showPassphrase = !showPassphrase)} disabled={busy}>
+        {showPassphrase ? "Masquer" : "Afficher"}
+      </button>
+      <button type="button" onclick={suggest} disabled={busy}>Proposer…</button>
+    </div>
+    {#if suggestion}
+      <div class="generator">
+        <p class="generated"><code>{suggestion}</code></p>
+        <p class="muted small">Six mots tirés au hasard (environ 77 bits) : écrivez-les sur papier avant de continuer.</p>
+        <div class="actions">
+          <button type="button" onclick={() => (suggestion = null)}>Fermer</button>
+          <button type="button" onclick={suggest}>Autre phrase</button>
+          <button type="button" class="primary" onclick={useSuggestion}>Utiliser cette phrase</button>
+        </div>
+      </div>
+    {/if}
     <StrengthMeter {strength} />
     <p class="muted small">
       Plusieurs mots sans rapport entre eux, avec des séparateurs, font une phrase solide et facile à retenir.
@@ -137,7 +181,14 @@
     </p>
 
     <label for="confirmation">Confirmation</label>
-    <input id="confirmation" type="password" autocomplete="new-password" bind:value={confirmation} disabled={busy} />
+    <input
+      id="confirmation"
+      type={showPassphrase ? "text" : "password"}
+      autocomplete="new-password"
+      spellcheck="false"
+      bind:value={confirmation}
+      disabled={busy}
+    />
     {#if mismatch}<p class="error small">Les deux saisies diffèrent.</p>{/if}
 
     <fieldset disabled={busy}>

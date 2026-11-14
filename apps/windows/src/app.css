@@ -447,3 +447,143 @@ button.small-button {
 code {
   font-family: Consolas, "Cascadia Mono", monospace;
 }
+
+/* Onglets du coffre */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--bordure);
+  margin-top: 10px;
+}
+
+.tabs button {
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: none;
+  padding: 8px 14px;
+  color: var(--discret);
+}
+
+.tabs button.current {
+  color: var(--texte);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.pane.single {
+  margin-top: 12px;
+  flex: 1;
+  max-width: 760px;
+}
+
+/* État de la synchronisation */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  padding: 5px 10px;
+}
+
+.badge .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--discret);
+}
+
+.badge.state-a_jour .dot {
+  background: var(--succes);
+}
+
+.badge.state-en_cours .dot,
+.badge.state-en_attente .dot {
+  background: var(--focus);
+}
+
+.badge.state-hors_ligne .dot {
+  background: #d18b00;
+}
+
+.badge.state-suspendue .dot,
+.badge.state-erreur .dot {
+  background: var(--erreur);
+}
+
+.state-line.state-suspendue,
+.state-line.state-erreur {
+  color: var(--erreur);
+}
+
+/* Sauvegardes */
+.backup-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+}
+
+.backup-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bordure);
+}
+
+.backup-list li:last-child {
+  border-bottom: none;
+}
+
+/* Réglages */
+.narrow-row input {
+  flex: 0 0 90px;
+}
+
+/* Générateur : choix du type */
+.segmented {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.segmented label {
+  font-weight: 400;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  cursor: pointer;
+}
+
+.segmented label.current {
+  border-color: var(--accent);
+  background: var(--accent-clair);
+}
+
+.checks label.inline {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+select {
+  font: inherit;
+  color: var(--texte);
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 3px 6px;
+}
+
+input[type="number"] {
+  font: inherit;
+  color: var(--texte);
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 7px 10px;
+}

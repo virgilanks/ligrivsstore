@@ -29,6 +29,9 @@ pub struct BackupInfo {
     pub path: PathBuf,
     /// Taille, en octets.
     pub size: u64,
+    /// Moment où cette version a été remplacée par une plus récente (UTC,
+    /// ISO 8601), lu dans le nom du fichier.
+    pub replaced_utc: Option<String>,
 }
 
 /// Emplacement d'un coffre sur le terminal.
@@ -118,6 +121,7 @@ impl LocalStore {
             let name = item.file_name().to_string_lossy().into_owned();
             if name.starts_with(&prefix) && name.ends_with(".kdbx") && item.file_type()?.is_file() {
                 list.push(BackupInfo {
+                    replaced_utc: backup_stamp(&name, &prefix),
                     path: item.path(),
                     size: item.metadata()?.len(),
                 });
@@ -183,6 +187,15 @@ impl LocalStore {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "coffre".to_owned())
     }
+}
+
+/// Horodatage d'une sauvegarde, lu dans son nom
+/// (`<coffre>.<AAAAMMJJ>T<HHMMSS>.<microsecondes>Z.<numéro>.kdbx`).
+fn backup_stamp(name: &str, prefix: &str) -> Option<String> {
+    let rest = name.strip_prefix(prefix)?;
+    let stamp = rest.get(..15)?;
+    let parsed = chrono::NaiveDateTime::parse_from_str(stamp, "%Y%m%dT%H%M%S").ok()?;
+    Some(parsed.format("%Y-%m-%dT%H:%M:%SZ").to_string())
 }
 
 /// Écrit un nouveau fichier (échec s'il existe), lisible par son seul

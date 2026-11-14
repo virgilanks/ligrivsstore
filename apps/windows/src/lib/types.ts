@@ -76,3 +76,78 @@ export interface Strength {
   guessesLog10: number;
   tooShort: boolean;
 }
+
+export interface PassphraseOptions {
+  words: number;
+  separator: string;
+  capitalize: boolean;
+  digit: boolean;
+}
+
+export type SyncState =
+  | "non_configuree"
+  | "en_attente"
+  | "en_cours"
+  | "a_jour"
+  | "hors_ligne"
+  | "suspendue"
+  | "erreur";
+
+export interface SyncStatusView {
+  configured: boolean;
+  state: SyncState;
+  lastSuccess: string | null;
+  message: string | null;
+}
+
+export interface Activity {
+  unlocked: boolean;
+  lockMessage: string | null;
+  revision: number;
+  sync: SyncStatusView;
+}
+
+export interface SyncSettingsView {
+  configured: boolean;
+  server: string;
+  account: string;
+  file: string;
+  hasPassword: boolean;
+}
+
+export interface SyncSettingsRequest {
+  server: string;
+  account: string;
+  file: string;
+  password: string | null;
+}
+
+export interface InstallRequest {
+  server: string;
+  account: string;
+  file: string;
+  serverPassword: string;
+  path: string;
+  passphrase: string;
+  keyfilePath: string | null;
+}
+
+export interface BackupView {
+  id: string;
+  replaced: string | null;
+  size: number;
+}
+
+export interface RestoreView {
+  restored: number;
+  recreated: number;
+  unchanged: number;
+  skipped: number;
+}
+
+export type CopyField = "username" | "password";
+
+export interface Preferences {
+  lockMinutes: number;
+  clipboardSeconds: number;
+}

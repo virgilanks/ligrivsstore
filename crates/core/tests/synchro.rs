@@ -325,3 +325,130 @@ fn a_credentials_refusal_suspends_synchronisation_until_new_credentials() {
     assert!(reopened.sync(&server, &options()).unwrap().uploaded);
     assert!(reopened.sync_state().credentials_rejected_utc.is_none());
 }
+
+fn backup_names(local: &LocalVault) -> Vec<String> {
+    local
+        .backups()
+        .unwrap()
+        .into_iter()
+        .map(|b| b.path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn an_upload_sends_the_saved_file_without_rewriting_it() {
+    // Un envoi sans fusion n'a rien à réenregistrer. S'il réécrivait le
+    // fichier, chaque envoi ajouterait une sauvegarde identique au coffre, et
+    // « restaurer la plus récente » après une suppression ne rétablirait rien.
+    let dir = tempfile::tempdir().unwrap();
+    let server = MemoryServer::new();
+    let mut a = LocalVault::create(dir.path().join("a.kdbx"), "Coffre", key(), fast_kdf()).unwrap();
+    a.vault_mut().add_entry(&entry("Banque", "v1")).unwrap();
+    let mail = a.vault_mut().add_entry(&entry("Messagerie", "m1")).unwrap();
+    a.save().unwrap();
+    a.sync(&server, &options()).unwrap();
+
+    a.vault_mut().delete_entry(&mail).unwrap();
+    a.save().unwrap();
+    let saved = std::fs::read(a.path()).unwrap();
+    let backups = backup_names(&a);
+    let report = a.sync(&server, &options()).unwrap();
+    assert!(report.uploaded && report.merge.is_empty(), "{report:?}");
+    assert!(std::fs::read(a.path()).unwrap() == saved, "fichier réécrit");
+    assert!(
+        server.body().unwrap() == saved,
+        "envoi différent du fichier"
+    );
+    assert_eq!(backup_names(&a), backups, "sauvegarde ajoutée par l'envoi");
+
+    // La sauvegarde la plus récente reste l'état d'avant la suppression.
+    let report = a.restore_backup(&backups[0]).unwrap();
+    assert_eq!(report.recreated, 1, "{report:?}");
+    assert_eq!(titles(&a), ["Banque", "Messagerie"]);
+}
+
+#[test]
+fn after_a_restart_a_pending_upload_sends_the_saved_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = MemoryServer::new();
+    let path = dir.path().join("a.kdbx");
+    let mut a = LocalVault::create(&path, "Coffre", key(), fast_kdf()).unwrap();
+    a.vault_mut().add_entry(&entry("Banque", "v1")).unwrap();
+    a.save().unwrap();
+    drop(a);
+
+    // Application fermée avant l'envoi, puis rouverte : le fichier est
+    // reconnu à son empreinte et part tel quel.
+    let mut a = LocalVault::open(&path, key(), OpenLimits::default()).unwrap();
+    let saved = std::fs::read(&path).unwrap();
+    let backups = backup_names(&a);
+    assert!(a.sync(&server, &options()).unwrap().uploaded);
+    assert!(std::fs::read(&path).unwrap() == saved, "fichier réécrit");
+    assert!(
+        server.body().unwrap() == saved,
+        "envoi différent du fichier"
+    );
+    assert_eq!(backup_names(&a), backups);
+}
+
+#[test]
+fn a_change_not_yet_saved_is_written_before_it_is_sent() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = MemoryServer::new();
+    let path = dir.path().join("a.kdbx");
+    let mut a = LocalVault::create(&path, "Coffre", key(), fast_kdf()).unwrap();
+    a.vault_mut().add_entry(&entry("Banque", "v1")).unwrap();
+    a.save().unwrap();
+
+    // Modification restée en mémoire (enregistrement en échec, par exemple) :
+    // l'envoi l'enregistre d'abord, puis envoie ce qu'il a écrit.
+    a.vault_mut().add_entry(&entry("Messagerie", "m1")).unwrap();
+    assert!(a.sync(&server, &options()).unwrap().uploaded);
+    let sent = server.body().unwrap();
+    assert!(sent == std::fs::read(&path).unwrap());
+    let remote = Vault::open(&sent, &key(), &OpenLimits::default()).unwrap();
+    let mut remote_titles: Vec<_> = remote.entries().into_iter().map(|e| e.title).collect();
+    remote_titles.sort();
+    assert_eq!(remote_titles, ["Banque", "Messagerie"]);
+}
+
+#[test]
+fn a_file_written_by_another_program_is_rewritten_before_it_is_sent() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = MemoryServer::new();
+    let path = dir.path().join("a.kdbx");
+    let mut a = LocalVault::create(&path, "Coffre", key(), fast_kdf()).unwrap();
+    a.vault_mut().add_entry(&entry("Banque", "v1")).unwrap();
+    a.save().unwrap();
+    let foreign = |path: &Path| {
+        let bytes = std::fs::read(path).unwrap();
+        let mut other = Vault::open(&bytes, &key(), &OpenLimits::default()).unwrap();
+        let rewritten = other.to_bytes(&key()).unwrap();
+        std::fs::write(path, &rewritten).unwrap();
+        rewritten
+    };
+
+    // Coffre ouvert : le fichier a changé sur le disque depuis son écriture.
+    let written = foreign(&path);
+    assert!(a.sync(&server, &options()).unwrap().uploaded);
+    let sent = server.body().unwrap();
+    assert!(
+        sent != written,
+        "fichier d'un autre programme envoyé tel quel"
+    );
+    assert!(sent == std::fs::read(&path).unwrap());
+
+    // Même règle après une réouverture.
+    a.vault_mut().add_entry(&entry("Messagerie", "m1")).unwrap();
+    a.save().unwrap();
+    drop(a);
+    let written = foreign(&path);
+    let mut a = LocalVault::open(&path, key(), OpenLimits::default()).unwrap();
+    assert!(a.sync(&server, &options()).unwrap().uploaded);
+    let sent = server.body().unwrap();
+    assert!(
+        sent != written,
+        "fichier d'un autre programme envoyé tel quel"
+    );
+    assert!(sent == std::fs::read(&path).unwrap());
+}

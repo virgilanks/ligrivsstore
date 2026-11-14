@@ -12,7 +12,7 @@
 //! - [`storage`] : écriture atomique, relecture de contrôle, sauvegardes locales ;
 //! - [`local`] : coffre local d'un terminal et boucle de synchronisation ;
 //! - [`sync`] : échanges avec le serveur « coffre » (WebDAV, envoi conditionnel) ;
-//! - [`generator`] : mots de passe aléatoires.
+//! - [`generator`] : mots de passe et phrases de passe aléatoires.
 //!
 //! Le serveur ne voit jamais que des fichiers chiffrés : la fusion des
 //! modifications faites sur plusieurs terminaux se fait ici, sur le terminal.
@@ -41,5 +41,8 @@ pub use error::{Error, Result};
 pub use header::OpenLimits;
 pub use kdf::KdfParams;
 pub use local::LocalVault;
-pub use sync::{SyncOptions, SyncReport, Transport, WebDavTransport};
-pub use vault::{EntryDetails, EntryInput, EntrySummary, MergeReport, Vault, VaultKey};
+pub use sync::{SyncError, SyncOptions, SyncReport, Transport, TransportOptions, WebDavTransport};
+pub use vault::{
+    EntryDetails, EntryInput, EntrySummary, MergeReport, ROLE_FIELD, RestoreReport, SYNC_ROLE,
+    Vault, VaultKey,
+};

@@ -2,7 +2,7 @@
 
 Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec extension Chrome et Edge) et Android, puis iPhone, iPad et Mac. Chaque terminal garde son coffre chiffré et le synchronise avec le serveur « coffre » hébergé sur l'infrastructure Zanzibar.
 
-> **État : jalon 1 en cours (semaine 1 sur 5).** Le noyau, l'outil de recette, les tests et l'intégration continue sont en place et recettés (jalon 0). L'application Windows prend forme : création et ouverture du coffre, entrées, générateur, installateur. La synchronisation, l'extension et le remplissage arrivent dans les semaines suivantes.
+> **État : jalon 1 en cours (semaine 2 sur 5).** Le noyau, l'outil de recette, les tests et l'intégration continue sont en place et recettés (jalon 0). L'application Windows crée, ouvre et synchronise le coffre entre plusieurs PC, se verrouille seule, copie sans laisser de trace et restaure ses sauvegardes. L'extension et le remplissage arrivent dans les semaines suivantes.
 
 ## Principes
 
@@ -18,7 +18,8 @@ Gestionnaire de mots de passe du projet **KEEPASS** : applications Windows (avec
 |---|---|
 | `crates/core` | Noyau `ligrivsstore-core` : coffre, contrôle d'en-tête, dérivation, stockage, fusion, synchronisation, générateur |
 | `crates/cli` | Outil `lgs`, pour le développement, la recette et le diagnostic (ce n'est pas l'application) |
-| `crates/app` | Logique de l'application de bureau `ligrivsstore-app` : session, réglages, messages et erreurs de l'interface, robustesse des phrases de passe (sans Tauri, testée avec le reste) |
+| `crates/app` | Logique de l'application de bureau `ligrivsstore-app` : session, synchronisation, pilote (verrouillage automatique, échéances), réglages, messages et erreurs de l'interface (sans Tauri, testée avec le reste) |
+| `crates/win` | Intégration à Windows `ligrivsstore-win` : verrouillage de session, mise en veille, presse-papiers protégé ; seul paquet où du code `unsafe` est admis (décision 0011) |
 | `apps/windows` | Application Windows : interface Svelte (`src`), coquille Tauri (`src-tauri`), cadre d'isolation (`isolation`) |
 | `fuzz` | Cibles de tests aléatoires guidés (cargo-fuzz), lancées chaque semaine |
 | `scripts` | Banc WebDAV local (Apache derrière un relais HTTPS), tests du serveur et scénario de recette de bout en bout |
@@ -65,8 +66,10 @@ L'intégration continue produit aussi l'installateur à chaque demande de fusion
 
 Les secrets ne passent jamais par la ligne de commande. Ils sont lus dans des variables d'environnement : `LGS_PASSWORD` (coffre), `LGS_WEBDAV_PASSWORD` (serveur) et `LGS_ENTRY_PASSWORD` (entrée).
 
+Depuis le dossier du dépôt, sans installer l'outil : `lgs() { cargo run -q -p ligrivsstore-cli -- "$@"; }`.
+
 ```bash
-read -rs LGS_PASSWORD && export LGS_PASSWORD
+read -rsp "Phrase de passe du coffre : " LGS_PASSWORD && echo && export LGS_PASSWORD
 lgs new coffre.kdbx --calibrate-ms 1000      # crée un coffre (Argon2id calibré)
 lgs add coffre.kdbx --title Banque --url https://banque.exemple --username hermann --generate 24
 lgs list coffre.kdbx

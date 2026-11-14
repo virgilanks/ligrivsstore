@@ -67,3 +67,111 @@ Les dix étapes, S1-1 à S1-10, sont réussies sur le PC Windows d'Hermann. L'in
 L'étape S1-10 confirme que le coffre et le fichier clé survivent à une désinstallation qui supprime les données de l'application.
 
 **Critère de sortie de la semaine 1 atteint** : l'installateur crée, ouvre et modifie un coffre. La semaine 1 peut être fusionnée.
+
+## Semaine 2 — synchronisation, verrouillage, presse-papiers, sauvegardes
+
+Livrable vérifiable : **deux postes synchronisés par le serveur « coffre »**. S'y ajoutent le verrouillage automatique, le presse-papiers protégé, les sauvegardes, l'installation depuis le serveur et les phrases de passe (décision 0011).
+
+### 1. Essais automatiques (11 novembre 2026)
+
+| Essai | Résultat |
+|---|---|
+| Tests du dépôt, avec KeePassXC 2.7.6 et le banc Apache derrière le relais HTTPS (Linux, Rust 1.97.0) | 145 réussis, 0 échec, 1 ignoré (générateur des graines du fuzzing) |
+| Deux postes (`crates/app/tests/deux_postes.rs`), contre le banc : création et premier envoi, installation depuis le serveur, modifications des deux côtés et convergence, suppression synchronisée puis restauration de la sauvegarde la plus récente (propagée), mauvais mot de passe puis suspension, nouvelle saisie | Réussi |
+| Scénario de bout en bout de l'outil `lgs` (`scripts/scenario-synchro.sh`), contre le banc, après la correction ci-dessous | 25 réussis, 0 échoué |
+| Pilote (`autopilot`) : verrouillage à l'inactivité, réveil détecté par un saut d'horloge, synchronisation à l'ouverture, 10 s après la dernière modification et toutes les 15 minutes, essais espacés hors ligne, aucun essai après un refus, effacement du presse-papiers | Réussi |
+| Session : entrée réservée cachée et refusée aux commandes ordinaires, serveur injoignable (hors ligne), refus d'identifiants (une seule requête, puis plus rien, même après réouverture), pause d'une minute à l'installation après un refus, sauvegardes, copie, réglages, phrases de passe | Réussi |
+| Noyau : liste de l'EFF (empreinte SHA-256), phrases de passe, entrées réservées à travers enregistrement et fusion, restauration sans perte, sauvegarde d'un autre coffre refusée ; envoi du fichier enregistré sans réécriture ni sauvegarde en double, y compris après réouverture ; réécriture avant l'envoi d'une modification non enregistrée ou d'un fichier modifié par un autre programme | Réussi |
+| Sous Windows, dans l'intégration continue : fenêtre cachée qui reçoit verrouillage de session et mise en veille ; presse-papiers protégé (trois formats lus et vérifiés, effacement, copie d'un autre programme respectée) ; clippy sur le code propre à Windows | Réussi |
+| `svelte-check`, `cargo fmt`, `cargo clippy -D warnings` (dépôt et coquille), `cargo deny` (dépôt, application Windows), `npm audit` des paquets livrés | Aucune remarque ; conformes |
+| Intégration continue sur GitHub (Rust 1.99.1), demande n° 5, après la correction (commit 58c5a23) | Verte : 145 tests sous Linux, 148 sous Windows (KeePassXC 2.8.0) ; essai `deux_postes`, restauration comprise, contre le banc derrière le relais HTTPS ; installateur produit (archive de 3,4 Mo) |
+
+### 2. Essai de l'application compilée : deux postes
+
+Deux instances de l'application compilée, chacune avec son propre profil, pilotées au clavier et à la souris dans deux écrans virtuels, contre le banc Apache (accès local en `http://127.0.0.1`).
+
+| Étape | Résultat |
+|---|---|
+| Poste 1 : création (phrase de passe proposée : six mots de l'EFF), entrée « Banque », réglage de la synchronisation | « À jour » ; coffre créé sur le serveur (GET 404, puis PUT 201) |
+| Poste 2 : « Installer le coffre du serveur », avec une copie du fichier clé | Coffre installé, « Banque » présente, entrée réservée cachée |
+| Poste 2 : ajout de « Messagerie » | Envoyé 10 s après (GET 304, puis PUT 204) |
+| Poste 1 : « Synchroniser maintenant » | « Messagerie » apparaît ; deux entrées |
+| Poste 1 : délai de verrouillage réglé à 1 minute, puis aucune action | Écran de déverrouillage : « Coffre verrouillé après 1 minute d'inactivité. » |
+| Poste 2 : suppression de « Messagerie », puis restauration de la dernière sauvegarde | « 1 recréée » ; envoyé 10 s après |
+| Poste 1 : déverrouillage | Synchronisé à l'ouverture : « Banque » et « Messagerie », sans doublon |
+| Les deux fichiers ouverts avec KeePassXC 2.7.6 | Mêmes entrées ; l'entrée réservée porte l'attribut `ligrivsstore-role` |
+
+La copie dans le presse-papiers ne fonctionne que sous Windows : sous Linux, l'application affiche « fonction disponible sous Windows seulement ». Le presse-papiers est vérifié par l'intégration continue sous Windows, et par vous (S2-5).
+
+Défaut trouvé en relisant la recette (étape S2-7), corrigé avant la fusion : chaque synchronisation réécrivait le fichier du coffre, et chaque réécriture ajoutait une sauvegarde identique à l'état courant. Dix secondes après une suppression, la sauvegarde la plus récente ne contenait donc plus l'entrée, et sa restauration ne rétablissait rien. Pendant l'essai ci-dessus, la restauration avait eu lieu avant la synchronisation automatique, ce qui masquait le défaut. Désormais, un envoi sans fusion envoie le fichier tel qu'enregistré, reconnu à son empreinte, sans le réécrire (décision 0011). L'essai `deux_postes` joue maintenant ce cas contre le banc, et quatre essais du noyau couvrent la règle.
+
+### 3. Recette par Hermann
+
+Avec le compte de recette `recette-j0` du serveur en service, et un coffre d'essai nommé `recette-j1.kdbx` sur le serveur. Saisissez le mot de passe du serveur sans erreur : le serveur bloque votre adresse pendant 4 heures après cinq refus en rafale. Ne communiquez ni ce mot de passe ni la phrase de passe, pas même dans une conversation avec Claude.
+
+| N° | Étape | Attendu |
+|---|---|---|
+| S2-1 | Installer l'installateur de la demande de fusion n° 5, par-dessus la version de la semaine 1. Le prendre dans l'onglet « Checks », comme en S1-1 : cet onglet montre l'exécution la plus récente. Les exécutions antérieures au commit 58c5a23 n'ont pas la correction de S2-7 | Le coffre de la semaine 1 s'ouvre toujours |
+| S2-2 | Onglet « Synchronisation » : adresse `https://coffre.ligrivs.com`, compte `recette-j0`, nom `recette-j1.kdbx`, mot de passe du serveur, puis « Enregistrer » | Pastille « À jour » en quelques secondes |
+| S2-3 | Second poste, au choix : un autre PC Windows, avec l'application et « Installer le coffre du serveur… » (fichier clé : « Choisir… », la copie faite en S1-9) ; ou l'outil `lgs` dans WSL (commandes ci-dessous) | Les entrées du premier poste y apparaissent. `lgs` liste en plus « Serveur de synchronisation (ligrivsstore) » : c'est l'entrée réservée qui porte les identifiants du serveur, que l'application cache |
+| S2-4 | Ajouter une entrée sur le second poste et la synchroniser ; dans l'application, « Synchroniser maintenant ». Modifier ensuite une entrée dans l'application, attendre 15 s, synchroniser le second poste. L'envoi part 10 s après l'enregistrement, et la pastille reste « À jour » en attendant (voir les résultats) | Chaque modification apparaît de l'autre côté ; l'historique garde la version précédente |
+| S2-5 | Ouvrir Windows + V et, s'il le propose, activer l'historique du presse-papiers : sans lui, l'essai ne prouve rien. « Copier » un mot de passe dans l'application, le coller dans le Bloc-notes, puis rouvrir Windows + V. Attendre 30 s et coller de nouveau | Collé une fois ; absent de l'historique ; plus rien à coller après 30 s |
+| S2-6 | Réglages : verrouillage après 1 minute ; attendre sans toucher l'application. Puis Windows + L, rouvrir la session. Puis mise en veille et réveil. Déverrouiller le coffre entre deux essais | Trois fois l'écran de déverrouillage, avec le motif : inactivité, session Windows, mise en veille |
+| S2-7 | Supprimer une entrée et attendre au moins 15 s : la synchronisation automatique passe. Puis onglet « Sauvegardes » : restaurer la plus récente | « Restauration faite : 0 entrée rétablie, 1 recréée. » ; l'entrée revient ; après synchronisation, aussi sur le second poste |
+| S2-8 | Générateur d'une fiche : « Phrase de passe » ; à la création d'un coffre : « Proposer… » | Mots anglais séparés ; entropie affichée |
+| S2-9 | Remettre le verrouillage à 5 minutes | — |
+
+Second poste dans WSL (Ubuntu), depuis le dossier du dépôt, à jour de la branche `main` (`git pull`). Ces commandes existent depuis le jalon 0 : inutile d'attendre la fusion de la semaine 2. Remplacez `<vous>` par votre nom d'utilisateur Windows.
+
+1. Préparation. La fonction `lgs` passe par cargo, qui retrouve l'outil même quand les fichiers compilés sont rangés hors du dossier `target` (variable `CARGO_TARGET_DIR`, par exemple) :
+
+   ```bash
+   cargo build -p ligrivsstore-cli
+   lgs() { cargo run -q -p ligrivsstore-cli -- "$@"; }
+   cp /mnt/c/Users/<vous>/AppData/Local/ligrivsstore-cles/coffre.keyx ~/recette-j1.keyx
+   chmod 600 ~/recette-j1.keyx
+   ```
+
+2. Les deux secrets, une ligne à la fois. Chaque ligne pose sa question, puis attend la saisie, qui reste masquée. Ne les collez pas avec la suite : le terminal pourrait prendre la ligne suivante du collage pour le secret.
+
+   ```bash
+   read -rsp "Phrase de passe du coffre : " LGS_PASSWORD && echo && export LGS_PASSWORD
+   read -rsp "Mot de passe du serveur : " LGS_WEBDAV_PASSWORD && echo && export LGS_WEBDAV_PASSWORD
+   ```
+
+3. Installation, liste, ajout et envoi. `lgs clone` et `lgs list` comptent et montrent aussi l'entrée réservée « Serveur de synchronisation (ligrivsstore) ». En cas de refus d'identifiants (401), ne relancez pas : cinq refus en rafale bannissent l'adresse du PC pendant 4 heures, ce qui bloque aussi l'application Windows.
+
+   ```bash
+   URL=https://coffre.ligrivs.com/dav/recette-j0/recette-j1.kdbx
+   lgs clone ~/recette-j1.kdbx --url $URL --user recette-j0 -k ~/recette-j1.keyx
+   lgs list ~/recette-j1.kdbx -k ~/recette-j1.keyx
+   lgs add ~/recette-j1.kdbx --title "Ajout depuis WSL" --username essai --generate 20 -k ~/recette-j1.keyx
+   lgs sync ~/recette-j1.kdbx --url $URL --user recette-j0 -k ~/recette-j1.keyx
+   ```
+
+Dans un nouveau terminal, ou après un redémarrage, la fonction `lgs`, les deux secrets et `URL` sont perdus : redéfinissez-les (étapes 1 à 3), sans refaire ce qui est fait. Un coffre déjà installé fait répondre à `lgs clone` « le fichier existe déjà », sans conséquence.
+
+Si le coffre de la semaine 1 a été créé avec un autre fichier clé, utilisez celui-là. En cas d'écart, une capture d'écran et le numéro de l'étape suffisent.
+
+### 4. Résultats de la recette par Hermann (11 au 14 novembre 2026)
+
+Les neuf étapes, S2-1 à S2-9, sont réussies sur le PC Windows d'Hermann.
+
+- L'installateur est celui de l'intégration continue de la demande de fusion n° 5, avec la correction de S2-7 (commit 58c5a23). Les commits suivants ne touchent que la documentation et le scénario de bout en bout.
+- Le second poste est l'outil `lgs` dans WSL :
+  - `lgs clone` installe le coffre avec 4 entrées : les 3 du PC et l'entrée réservée ;
+  - l'ajout fait dans WSL arrive dans l'application ;
+  - la modification faite dans l'application arrive dans WSL, et son historique passe d'une à deux versions antérieures.
+- Un redémarrage du PC pour les mises à jour de Windows, au milieu de S2-3, n'a rien fait perdre. Seuls les deux secrets étaient à ressaisir dans WSL.
+
+Écarts relevés, sans échec d'étape :
+
+- **S2-3, documentation.** La recette indiquait `target/debug/lgs`, introuvable sur ce PC : cargo y range les fichiers compilés ailleurs. Corrigé (commit b39f547) :
+  - la recette passe par une fonction `lgs` qui appelle `cargo run` ;
+  - le scénario de bout en bout demande à cargo où sont ses fichiers compilés.
+- **S2-3, documentation.** Collés d'un bloc avec la suite, les `read -rs` attendaient la saisie sans rien afficher. Corrigé (commit ae4e58b) : les secrets se saisissent une ligne à la fois, et chaque `read` affiche sa question.
+- **S2-4, application.** Pendant les 10 s qui précèdent l'envoi d'une modification, la pastille affiche « À jour ». C'est un défaut d'affichage, sans perte de données : la modification part au plus tard au déverrouillage suivant.
+  - Correction prévue au début de la semaine 3 : une pastille « Modifications à envoyer » pendant ce délai.
+  - En attendant, l'étape S2-4 demande d'attendre 15 s.
+
+**Critère de sortie de la semaine 2 atteint** : deux postes synchronisés par le serveur « coffre ». La semaine 2 peut être fusionnée.

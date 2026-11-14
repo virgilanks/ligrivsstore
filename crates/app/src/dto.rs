@@ -191,3 +191,143 @@ pub struct Strength {
     /// Moins de 12 caractères.
     pub too_short: bool,
 }
+
+/// Options du générateur de phrases de passe.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PassphraseOptions {
+    /// Nombre de mots (4 à 12).
+    pub words: usize,
+    /// Séparateur : tiret, espace, point ou soulignement.
+    pub separator: String,
+    /// Initiale de chaque mot en majuscule.
+    pub capitalize: bool,
+    /// Un chiffre accolé à un mot.
+    pub digit: bool,
+}
+
+/// État observable, relu régulièrement par l'interface.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Activity {
+    /// Un coffre est ouvert et déverrouillé.
+    pub unlocked: bool,
+    /// Motif du dernier verrouillage, à afficher.
+    pub lock_message: Option<String>,
+    /// Numéro qui change quand le contenu du coffre a changé hors de
+    /// l'interface (fusion, restauration) : la liste doit être relue.
+    pub revision: u64,
+    /// Synchronisation.
+    pub sync: SyncStatusView,
+}
+
+/// État de la synchronisation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatusView {
+    /// Synchronisation réglée dans ce coffre.
+    pub configured: bool,
+    /// `non_configuree`, `en_attente`, `en_cours`, `a_jour`, `hors_ligne`,
+    /// `suspendue` ou `erreur`.
+    pub state: &'static str,
+    /// Dernier échange réussi (UTC, ISO 8601).
+    pub last_success: Option<String>,
+    /// Explication d'un échec.
+    pub message: Option<String>,
+}
+
+/// Réglage de la synchronisation, tel qu'affiché (sans le mot de passe).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSettingsView {
+    /// Synchronisation réglée.
+    pub configured: bool,
+    /// Serveur (`https://coffre.ligrivs.com`).
+    pub server: String,
+    /// Compte WebDAV.
+    pub account: String,
+    /// Nom du coffre sur le serveur.
+    pub file: String,
+    /// Un mot de passe du serveur est enregistré.
+    pub has_password: bool,
+}
+
+/// Demande de réglage de la synchronisation.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSettingsRequest {
+    /// Serveur.
+    pub server: String,
+    /// Compte WebDAV.
+    pub account: String,
+    /// Nom du coffre sur le serveur.
+    pub file: String,
+    /// Nouveau mot de passe du serveur ; absent pour garder l'actuel.
+    pub password: Option<String>,
+}
+
+/// Demande d'installation, sur ce PC, du coffre présent sur le serveur.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallRequest {
+    /// Serveur.
+    pub server: String,
+    /// Compte WebDAV.
+    pub account: String,
+    /// Nom du coffre sur le serveur.
+    pub file: String,
+    /// Mot de passe du serveur.
+    pub server_password: String,
+    /// Emplacement du coffre sur ce PC.
+    pub path: String,
+    /// Phrase de passe du coffre.
+    pub passphrase: String,
+    /// Fichier clé du coffre, s'il en a un.
+    pub keyfile_path: Option<String>,
+}
+
+/// Une sauvegarde locale.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupView {
+    /// Identifiant : nom du fichier.
+    pub id: String,
+    /// Moment où cette version a été remplacée (UTC, ISO 8601).
+    pub replaced: Option<String>,
+    /// Taille, en octets.
+    pub size: u64,
+}
+
+/// Bilan d'une restauration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreView {
+    /// Entrées remises dans l'état de la sauvegarde.
+    pub restored: usize,
+    /// Entrées supprimées depuis, recréées.
+    pub recreated: usize,
+    /// Entrées identiques.
+    pub unchanged: usize,
+    /// Entrées écartées (champ trop long).
+    pub skipped: usize,
+}
+
+/// Champ à copier dans le presse-papiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CopyField {
+    /// Identifiant de connexion.
+    Username,
+    /// Mot de passe.
+    Password,
+}
+
+/// Réglages de l'application.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preferences {
+    /// Verrouillage après ce nombre de minutes d'inactivité (1 à 60).
+    pub lock_minutes: u32,
+    /// Effacement du presse-papiers après ce nombre de secondes (10 à 120).
+    pub clipboard_seconds: u32,
+}
