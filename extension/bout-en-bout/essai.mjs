@@ -234,6 +234,32 @@ try {
   verifie("domaines piégés et entrée https écartés", !titres.some((t) => /piégé|Autre|https/.test(t)));
   verifie("aucun mot de passe transmis", !JSON.stringify(liste).includes("password"));
 
+  // La fenêtre de l'extension sur la page de connexion. Un automate ne peut
+  // pas cliquer sur l'icône de l'extension : l'onglet de la page lui est
+  // désigné comme l'onglet actif.
+  const idCible = await options.evaluate(
+    async (adresse) => (await chrome.tabs.query({ url: adresse }))[0].id,
+    `http://www.exemple.test:${PORT}/*`,
+  );
+  const fenetreEntrees = await contexte.newPage();
+  await fenetreEntrees.addInitScript((id) => {
+    chrome.tabs.query = async () => [await chrome.tabs.get(id)];
+  }, idCible);
+  await fenetreEntrees.goto(`chrome-extension://${ID}/popup.html`);
+  await fenetreEntrees.getByText(`2 entrées pour www.exemple.test:${PORT}`).waitFor({ timeout: 15_000 });
+  const texteFenetre = (await fenetreEntrees.locator("#contenu").innerText()).replace(/\s+/g, " ");
+  verifie(
+    "fenêtre de l'extension : entrées du site, avec leurs mentions",
+    texteFenetre.includes("Exemple compte") &&
+      texteFenetre.includes("hermann.compte") &&
+      texteFenetre.includes("autre sous-domaine") &&
+      texteFenetre.includes("connexion non chiffrée (http)"),
+    texteFenetre,
+  );
+  await fenetreEntrees.setViewportSize({ width: 380, height: 300 });
+  await fenetreEntrees.screenshot({ path: join(captures, "3b-fenetre-extension.png") });
+  await fenetreEntrees.close();
+
   // 7. Fermer la fenêtre la cache, sans arrêter l'application ni verrouiller
   // le coffre (décision 0012) ; l'extension la montre ensuite.
   await activer(fenetre);
