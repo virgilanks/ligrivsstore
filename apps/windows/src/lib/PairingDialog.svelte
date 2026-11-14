@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { focusOnMount } from "./focus";
   import { api, messageOf } from "./api";
   import type { PairingRequestView } from "./types";
@@ -14,10 +15,25 @@
   let failure = $state<string | null>(null);
 
   let current = $derived(requests[0] ?? null);
+  /** Élément qui avait le focus avant la demande (le champ de la phrase de
+   * passe, par exemple) : il le retrouve quand la demande est tranchée. */
+  let returnFocus: HTMLElement | null = null;
 
   async function reload() {
     try {
-      requests = await api.pendingPairings();
+      const next = await api.pendingPairings();
+      const opening = requests.length === 0 && next.length > 0;
+      const closing = requests.length > 0 && next.length === 0;
+      // Relevé avant l'affichage de la demande, qui prend le focus.
+      if (opening && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+        returnFocus = document.activeElement;
+      }
+      requests = next;
+      if (closing) {
+        await tick();
+        if (returnFocus?.isConnected) returnFocus.focus();
+        returnFocus = null;
+      }
     } catch (error) {
       failure = messageOf(error);
     }

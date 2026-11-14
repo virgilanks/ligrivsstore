@@ -5,13 +5,15 @@
 //
 // Déroulé : le relais démarre l'application (cachée, coffre verrouillé) ;
 // appairage confirmé des deux côtés ; « coffre verrouillé » ; déverrouillage ;
-// entrées de la page ; domaines piégés écartés ; fenêtre montrée à la demande.
+// entrées de la page ; domaines piégés écartés ; fenêtre fermée, donc cachée,
+// coffre toujours ouvert ; fenêtre montrée à la demande de l'extension.
 //
 // Prérequis : extension construite (node build.mjs --bout-en-bout), relais et
 // outil lgs compilés (cargo build -p ligrivsstore-bridge -p ligrivsstore-cli),
 // application compilée (npm run tauri -- build --debug --no-bundle, dans
-// apps/windows), Xvfb et xdotool. Lancement, depuis extension/ :
-//   node bout-en-bout/essai.mjs
+// apps/windows), Xvfb, openbox (gestionnaire de fenêtres) et xdotool.
+// Lancement, depuis extension/ :
+//   dbus-run-session -- node bout-en-bout/essai.mjs
 // Pour l'essai seulement : jamais de vrai coffre ni de vrai mot de passe.
 
 import { execFileSync, spawn } from "node:child_process";
@@ -103,8 +105,10 @@ for (const dossier of [join(process.env.HOME ?? "/root", ".config", "chromium", 
   writeFileSync(join(dossier, "com.ligrivs.ligrivsstore.json"), manifeste);
 }
 
-// 3. Écran virtuel et page de connexion locale.
+// 3. Écran virtuel, gestionnaire de fenêtres et page de connexion locale.
 const xvfb = spawn("Xvfb", [ECRAN, "-screen", "0", "1280x900x24", "-nolisten", "tcp"], { stdio: "ignore" });
+await attendre(800);
+const gestionnaire = spawn("openbox", [], { env: { ...process.env, DISPLAY: ECRAN }, stdio: "ignore" });
 const serveur = createServer((_, res) => {
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   res.end('<!doctype html><title>Connexion</title><form><input name="u"><input type="password" name="p"></form>');
@@ -118,6 +122,29 @@ const fenetreApplication = () => {
     return xdotool("search", "--onlyvisible", "--name", "^ligrivsstore$").split("\n")[0];
   } catch {
     return null;
+  }
+};
+/** Attend que la fenêtre de l'application soit visible (ou cachée). */
+async function attendreFenetre(visible, essais = 40) {
+  for (let i = 0; i < essais; i += 1) {
+    const trouvee = fenetreApplication();
+    if (visible ? trouvee : !trouvee) return trouvee;
+    await attendre(250);
+  }
+  return visible ? null : fenetreApplication();
+}
+/** Met la fenêtre au premier plan : les touches passent ensuite par le
+ * serveur X (XTEST), comme celles d'un vrai clavier. */
+async function activer(fenetre) {
+  xdotool("windowactivate", "--sync", fenetre);
+  await attendre(400);
+}
+const processusVivant = () => {
+  try {
+    execFileSync("pgrep", ["-f", application]);
+    return true;
+  } catch {
+    return false;
   }
 };
 const capture = (nom) => {
@@ -155,19 +182,15 @@ try {
   await options.locator(".fingerprint").waitFor({ timeout: 30_000 });
   const empreinteExtension = (await options.locator(".fingerprint").textContent()).trim();
   verifie("empreinte affichée par l'extension (six groupes)", /^(\d{5} ){5}\d{5}$/.test(empreinteExtension), empreinteExtension);
-  let fenetre = null;
-  for (let i = 0; i < 40 && !fenetre; i += 1) {
-    await attendre(250);
-    fenetre = fenetreApplication();
-  }
+  let fenetre = await attendreFenetre(true);
   verifie("le relais a démarré l'application, qui montre la demande", fenetre !== null);
   await attendre(1500);
   capture("1-demande-appairage.png");
   // Confirmation dans l'application : le bouton « Refuser » a le focus,
   // « Confirmer l'appairage » vient ensuite.
-  xdotool("windowactivate", "--sync", fenetre);
-  xdotool("key", "--window", fenetre, "Tab");
-  xdotool("key", "--window", fenetre, "Return");
+  await activer(fenetre);
+  xdotool("key", "Tab");
+  xdotool("key", "Return");
   await options.getByRole("button", { name: "Oui, identique" }).waitFor({ timeout: 15_000 });
   await options.getByRole("button", { name: "Oui, identique" }).click();
   await options.getByText("Ce navigateur est appairé").waitFor({ timeout: 10_000 });
@@ -187,16 +210,17 @@ try {
   verifie("coffre verrouillé signalé", verrouille.ok === false && verrouille.code === "verrouille", JSON.stringify(verrouille));
 
   // 6. Déverrouillage dans l'application, puis entrées de la page.
-  xdotool("windowactivate", "--sync", fenetre);
-  await attendre(500);
-  xdotool("type", "--window", fenetre, "--delay", "15", PHRASE);
-  xdotool("key", "--window", fenetre, "Return");
+  await activer(fenetre);
+  xdotool("type", "--delay", "15", PHRASE);
+  xdotool("key", "Return");
   let liste = null;
   for (let i = 0; i < 40; i += 1) {
     await attendre(500);
     liste = await entrees();
     if (liste.ok) break;
   }
+  // La liste de l'application se charge juste après le déverrouillage.
+  await attendre(1000);
   capture("3-deverrouille.png");
   verifie("entrées de la page reçues", liste?.ok === true, JSON.stringify(liste));
   const titres = (liste?.entries ?? []).map((e) => e.title);
@@ -210,11 +234,18 @@ try {
   verifie("domaines piégés et entrée https écartés", !titres.some((t) => /piégé|Autre|https/.test(t)));
   verifie("aucun mot de passe transmis", !JSON.stringify(liste).includes("password"));
 
-  // 7. Montrer l'application.
-  xdotool("windowminimize", fenetre);
-  await attendre(500);
+  // 7. Fermer la fenêtre la cache, sans arrêter l'application ni verrouiller
+  // le coffre (décision 0012) ; l'extension la montre ensuite.
+  await activer(fenetre);
+  xdotool("key", "alt+F4");
+  const cachee = (await attendreFenetre(false)) === null;
+  verifie("fenêtre fermée : cachée, application toujours lancée", cachee && processusVivant());
+  const apresFermeture = await entrees();
+  verifie("coffre toujours ouvert après la fermeture de la fenêtre", apresFermeture.ok === true, JSON.stringify(apresFermeture).slice(0, 120));
   const montre = await options.evaluate(() => chrome.runtime.sendMessage({ kind: "montrer-application" }));
-  verifie("fenêtre montrée à la demande de l'extension", montre.ok === true, JSON.stringify(montre));
+  fenetre = await attendreFenetre(true);
+  verifie("fenêtre montrée à la demande de l'extension", montre.ok === true && fenetre !== null, JSON.stringify(montre));
+  capture("4-montree.png");
 
   // 8. La fenêtre de l'extension, ouverte comme une page, sur un onglet sans site.
   const fenetreExtension = await contexte.newPage();
@@ -232,6 +263,7 @@ try {
   } catch {
     // déjà arrêtée
   }
+  gestionnaire.kill();
   xvfb.kill();
 }
 
