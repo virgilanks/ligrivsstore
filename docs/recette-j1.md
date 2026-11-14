@@ -194,7 +194,7 @@ Livrable vérifiable : une extension appairée qui liste les entrées du site (n
 | Session et pastille : entrées du site sans secret ; « Modifications à envoyer » tant qu'une modification attend (écart S2-4), y compris dans l'essai `deux_postes` contre le banc | Réussi |
 | Extension : types (TypeScript), vecteurs communs avec le paquet Rust, rejeu, altération ; une mise en œuvre indépendante (Node.js, Web Crypto) retrouve aussi les clés, l'empreinte et les chiffrés des vecteurs | 6 réussis ; `npm audit` sans remarque |
 | `svelte-check`, `cargo fmt`, `cargo clippy -D warnings` (dépôt et coquille), `cargo deny` (dépôt ; application pour Windows), `npm audit` | Aucune remarque ; conformes |
-| Intégration continue sur GitHub (Rust 1.99.1), demande n° 6 | @@CI_S3@@ |
+| Intégration continue sur GitHub (Rust 1.99.1), demande n° 6, commit d133e95 | Verte : 190 tests sous Linux ; 196 sous Windows (KeePassXC 2.8.0), dont le canal nommé, le SID et DPAPI ; banc Apache derrière le relais HTTPS (tests du serveur 63/63, scénario 25/25, essai `deux_postes`) ; extension (6 essais, archive de 24 Ko) ; installateur produit avec le relais (3,67 Mio) |
 
 ### 2. Essai de bout en bout sous Linux
 
