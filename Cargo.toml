@@ -35,6 +35,10 @@ sha2 = "0.11.1"
 hex = "0.4.3"
 base64 = "0.23.1"
 url = "2.5.8"
+# Liste des suffixes publics (domaines enregistrables), compilée dans le
+# programme. Publiée presque chaque jour : version figée, mises à jour par
+# Dependabot et l'intégration continue (décision 0012).
+psl = "=2.1.251"
 # Client HTTP minimal : TLS par rustls, sans décompression (inutile pour des
 # fichiers chiffrés, et source de risques).
 ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }
