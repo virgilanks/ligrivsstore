@@ -79,6 +79,7 @@ Module `domain` du noyau, que l'application Android reprendra.
 - Fermer la fenêtre la cache sans verrouiller le coffre : l'extension peut encore lister les entrées. Le délai d'inactivité continue de courir.
 - « Quitter » verrouille le coffre et arrête l'application. La règle de la décision 0011 (verrouillage à la fermeture) vaut donc pour la sortie de l'application.
 - Démarrage avec Windows : option des réglages, désactivée par défaut, par `tauri-plugin-autostart` 2.7.0. L'application démarre alors cachée, coffre verrouillé. Sans cette option, l'extension la démarre quand elle en a besoin.
+- Une seule instance : un second lancement ramène la fenêtre de l'application déjà lancée, sauf s'il est fait en arrière-plan (relais, démarrage avec Windows). Dans ce cas, rien ne s'affiche.
 
 ### Déclaration du relais aux navigateurs
 
@@ -112,7 +113,7 @@ Module `domain` du noyau, que l'application Android reprendra.
 - Essais automatiques :
   - protocole : 16 essais Rust, 6 essais de l'extension sur les vecteurs communs ;
   - liaison de bout en bout par le canal : 7 ;
-  - relais : 4 ; canal, sous Linux et sous Windows : 4 ;
+  - relais : 4 ; canal : 3 sous Linux, 4 sous Windows ;
   - DPAPI et SID, sous Windows ;
   - correspondance des domaines : 8.
 - Essai de bout en bout sous Linux (`extension/bout-en-bout/essai.mjs`) : Chromium avec l'extension, le relais déclaré, l'application compilée sous un écran virtuel.

@@ -5,8 +5,10 @@
 //
 // Déroulé : le relais démarre l'application (cachée, coffre verrouillé) ;
 // appairage confirmé des deux côtés ; « coffre verrouillé » ; déverrouillage ;
-// entrées de la page ; domaines piégés écartés ; fenêtre fermée, donc cachée,
-// coffre toujours ouvert ; fenêtre montrée à la demande de l'extension.
+// entrées de la page ; domaines piégés écartés ; fenêtre de l'extension ;
+// fenêtre de l'application fermée, donc cachée, coffre toujours ouvert ;
+// fenêtre montrée à la demande de l'extension ; second lancement, en
+// arrière-plan (rien ne s'affiche) puis ordinaire (la fenêtre revient).
 //
 // Prérequis : extension construite (node build.mjs --bout-en-bout), relais et
 // outil lgs compilés (cargo build -p ligrivsstore-bridge -p ligrivsstore-cli),
@@ -273,7 +275,28 @@ try {
   verifie("fenêtre montrée à la demande de l'extension", montre.ok === true && fenetre !== null, JSON.stringify(montre));
   capture("4-montree.png");
 
-  // 8. La fenêtre de l'extension, ouverte comme une page, sur un onglet sans site.
+  // 8. Second lancement de l'application, qui tourne déjà : en arrière-plan
+  // (relais, démarrage avec Windows), il ne montre rien ; un lancement
+  // ordinaire montre la fenêtre.
+  await activer(fenetre);
+  xdotool("key", "alt+F4");
+  await attendreFenetre(false);
+  const envApplication = {
+    ...process.env,
+    HOME: maison,
+    XDG_CONFIG_HOME: join(maison, ".config"),
+    DISPLAY: ECRAN,
+    LIGRIVSSTORE_CANAL: canal,
+  };
+  execFileSync(application, ["--arriere-plan"], { env: envApplication, stdio: "ignore", timeout: 20_000 });
+  await attendre(2000);
+  verifie("second lancement en arrière-plan : fenêtre toujours cachée", fenetreApplication() === null);
+  execFileSync(application, [], { env: envApplication, stdio: "ignore", timeout: 20_000 });
+  verifie("second lancement ordinaire : fenêtre montrée", (await attendreFenetre(true)) !== null);
+  const instances = execFileSync("pgrep", ["-fc", `^${application}`], { encoding: "utf8" }).trim();
+  verifie("une seule instance de l'application", instances === "1", instances);
+
+  // 9. La fenêtre de l'extension, ouverte comme une page, sur un onglet sans site.
   const fenetreExtension = await contexte.newPage();
   await fenetreExtension.goto(`chrome-extension://${ID}/popup.html`);
   await fenetreExtension.getByText("Rien à proposer sur cette page").waitFor({ timeout: 10_000 });

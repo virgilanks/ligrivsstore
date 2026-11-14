@@ -217,11 +217,15 @@ Le relais est déclaré au navigateur comme l'installateur le fait sous Windows.
 | Fenêtre de l'extension sur la page | « 2 entrées pour www.exemple.test:8765 », avec « autre sous-domaine » et « connexion non chiffrée (http) » |
 | Fermeture de la fenêtre de l'application | Fenêtre cachée ; l'application tourne toujours et le coffre reste ouvert : l'extension liste encore les entrées |
 | « Ouvrir l'application » demandé par l'extension | Fenêtre montrée |
+| Fenêtre fermée, puis application relancée en arrière-plan, comme le ferait le relais ou le démarrage avec Windows | Rien ne s'affiche : l'application déjà lancée garde sa fenêtre cachée |
+| Application relancée normalement | La fenêtre de l'application déjà lancée revient ; une seule instance |
 | Fenêtre de l'extension sur une page interne du navigateur | « Rien à proposer sur cette page. » |
 
-Résultat : 17 vérifications réussies sur 17. L'essai a été répété huit fois après la correction ci-dessous, sans aucun échec.
+Résultat : 20 vérifications réussies sur 20. Depuis la correction ci-dessous, l'essai a été joué treize fois, sans aucun échec.
 
 Défaut trouvé par cet essai, corrigé avant la demande de fusion. Quand l'extension démarre l'application, la demande d'appairage prend le focus ; une fois la demande tranchée, le champ de la phrase de passe ne le retrouvait pas, et la phrase tapée au clavier se perdait. La demande rend désormais le focus à l'élément qui l'avait avant elle.
+
+Écart corrigé en relisant le démarrage : un second lancement de l'application montrait toujours sa fenêtre, même lancé en arrière-plan. Si le relais ne joignait pas l'application qui tournait déjà, la fenêtre apparaissait donc sans raison. Un lancement en arrière-plan ne montre plus rien.
 
 La zone de notification, le menu de son icône et le démarrage avec Windows ne peuvent pas être essayés sous Linux : ils le seront par vous (S3-1, S3-10 et S3-11).
 

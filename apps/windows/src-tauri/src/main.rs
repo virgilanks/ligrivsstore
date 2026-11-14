@@ -543,9 +543,13 @@ fn lock_from_tray(app: &AppHandle) {
 
 fn main() {
     let outcome = tauri::Builder::default()
-        // Une seule instance : un second lancement ramène la fenêtre existante.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_main(app);
+        // Une seule instance : un second lancement ramène la fenêtre existante,
+        // sauf un lancement en arrière-plan (relais, démarrage avec Windows) :
+        // l'application tourne déjà, il n'a rien à montrer.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !args.iter().any(|arg| arg == BACKGROUND_ARGUMENT) {
+                show_main(app);
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
