@@ -1,0 +1,28 @@
+[package]
+name = "ligrivsstore-protocol"
+description = "Protocole entre l'extension de navigateur et l'application ligrivsstore : trames, appairage, chiffrement des messages"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "ligrivsstore_protocol"
+
+[dependencies]
+x25519-dalek = { version = "3.0.0", features = ["static_secrets", "zeroize"] }
+hkdf = "0.13.0"
+sha2.workspace = true
+aes-gcm = "0.11.1"
+base64.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

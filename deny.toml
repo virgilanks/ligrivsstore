@@ -40,6 +40,12 @@ exceptions = [
     { allow = ["MPL-2.0"], crate = "cssparser-macros" },
     { allow = ["MPL-2.0"], crate = "dtoa-short" },
     { allow = ["MPL-2.0"], crate = "selectors" },
+    # Licence BSD sans clause (0BSD), sans aucune condition : plus permissive
+    # que MIT. Dépendances d'interprocess, le canal nommé entre le relais et
+    # l'application (décision 0012) : recvmsg sous Windows ; doctest-file, une
+    # macro de compilation, absente du programme livré.
+    { allow = ["0BSD"], crate = "recvmsg" },
+    { allow = ["0BSD"], crate = "doctest-file" },
 ]
 # Nos propres paquets ne sont pas publiés.
 private = { ignore = true }

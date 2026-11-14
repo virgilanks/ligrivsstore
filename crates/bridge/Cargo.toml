@@ -1,0 +1,25 @@
+[package]
+name = "ligrivsstore-bridge"
+description = "Relais de messagerie native (ligrivsstore-pont) entre Chrome ou Edge et l'application ligrivsstore"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "ligrivsstore_bridge"
+
+[[bin]]
+name = "ligrivsstore-pont"
+path = "src/main.rs"
+
+[dependencies]
+ligrivsstore-protocol.workspace = true
+ligrivsstore-win.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
