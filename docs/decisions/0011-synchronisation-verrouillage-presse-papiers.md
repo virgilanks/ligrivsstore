@@ -81,5 +81,6 @@ Le noyau savait déjà synchroniser (jalon 0). Il fallait décider où ranger le
 - Essai de l'application compilée, avec deux instances contre le banc : création, réglage, installation, ajout, synchronisation automatique 10 secondes après, fusion, suppression puis restauration propagées, verrouillage après une minute d'inactivité.
 - Restent pour la suite :
   - le démarrage avec Windows et la zone de notification (semaine 3, avec le relais) ;
+  - une pastille « Modifications à envoyer » pendant les 10 secondes qui précèdent l'envoi d'une modification (semaine 3) : relevé en recette (S2-4), la pastille affiche « À jour » pendant ce délai ;
   - le changement de phrase de passe et la restauration d'un coffre illisible (jalon 3) ;
   - un essai automatique de l'application compilée (semaine 5).

@@ -114,7 +114,7 @@ Avec le compte de recette `recette-j0` du serveur en service, et un coffre d'ess
 | S2-1 | Installer l'installateur de la demande de fusion n° 5, par-dessus la version de la semaine 1. Le prendre dans l'onglet « Checks », comme en S1-1 : cet onglet montre l'exécution la plus récente. Les exécutions antérieures au commit 58c5a23 n'ont pas la correction de S2-7 | Le coffre de la semaine 1 s'ouvre toujours |
 | S2-2 | Onglet « Synchronisation » : adresse `https://coffre.ligrivs.com`, compte `recette-j0`, nom `recette-j1.kdbx`, mot de passe du serveur, puis « Enregistrer » | Pastille « À jour » en quelques secondes |
 | S2-3 | Second poste, au choix : un autre PC Windows, avec l'application et « Installer le coffre du serveur… » (fichier clé : « Choisir… », la copie faite en S1-9) ; ou l'outil `lgs` dans WSL (commandes ci-dessous) | Les entrées du premier poste y apparaissent. `lgs` liste en plus « Serveur de synchronisation (ligrivsstore) » : c'est l'entrée réservée qui porte les identifiants du serveur, que l'application cache |
-| S2-4 | Ajouter une entrée sur le second poste et la synchroniser ; dans l'application, « Synchroniser maintenant ». Modifier ensuite une entrée dans l'application, attendre 10 s, synchroniser le second poste | Chaque modification apparaît de l'autre côté ; l'historique garde la version précédente |
+| S2-4 | Ajouter une entrée sur le second poste et la synchroniser ; dans l'application, « Synchroniser maintenant ». Modifier ensuite une entrée dans l'application, attendre 15 s, synchroniser le second poste. L'envoi part 10 s après l'enregistrement, et la pastille reste « À jour » en attendant (voir les résultats) | Chaque modification apparaît de l'autre côté ; l'historique garde la version précédente |
 | S2-5 | Ouvrir Windows + V et, s'il le propose, activer l'historique du presse-papiers : sans lui, l'essai ne prouve rien. « Copier » un mot de passe dans l'application, le coller dans le Bloc-notes, puis rouvrir Windows + V. Attendre 30 s et coller de nouveau | Collé une fois ; absent de l'historique ; plus rien à coller après 30 s |
 | S2-6 | Réglages : verrouillage après 1 minute ; attendre sans toucher l'application. Puis Windows + L, rouvrir la session. Puis mise en veille et réveil. Déverrouiller le coffre entre deux essais | Trois fois l'écran de déverrouillage, avec le motif : inactivité, session Windows, mise en veille |
 | S2-7 | Supprimer une entrée et attendre au moins 15 s : la synchronisation automatique passe. Puis onglet « Sauvegardes » : restaurer la plus récente | « Restauration faite : 0 entrée rétablie, 1 recréée. » ; l'entrée revient ; après synchronisation, aussi sur le second poste |
@@ -152,3 +152,26 @@ Second poste dans WSL (Ubuntu), depuis le dossier du dépôt, à jour de la bran
 Dans un nouveau terminal, ou après un redémarrage, la fonction `lgs`, les deux secrets et `URL` sont perdus : redéfinissez-les (étapes 1 à 3), sans refaire ce qui est fait. Un coffre déjà installé fait répondre à `lgs clone` « le fichier existe déjà », sans conséquence.
 
 Si le coffre de la semaine 1 a été créé avec un autre fichier clé, utilisez celui-là. En cas d'écart, une capture d'écran et le numéro de l'étape suffisent.
+
+### 4. Résultats de la recette par Hermann (11 au 14 novembre 2026)
+
+Les neuf étapes, S2-1 à S2-9, sont réussies sur le PC Windows d'Hermann.
+
+- L'installateur est celui de l'intégration continue de la demande de fusion n° 5, avec la correction de S2-7 (commit 58c5a23). Les commits suivants ne touchent que la documentation et le scénario de bout en bout.
+- Le second poste est l'outil `lgs` dans WSL :
+  - `lgs clone` installe le coffre avec 4 entrées : les 3 du PC et l'entrée réservée ;
+  - l'ajout fait dans WSL arrive dans l'application ;
+  - la modification faite dans l'application arrive dans WSL, et son historique passe d'une à deux versions antérieures.
+- Un redémarrage du PC pour les mises à jour de Windows, au milieu de S2-3, n'a rien fait perdre. Seuls les deux secrets étaient à ressaisir dans WSL.
+
+Écarts relevés, sans échec d'étape :
+
+- **S2-3, documentation.** La recette indiquait `target/debug/lgs`, introuvable sur ce PC : cargo y range les fichiers compilés ailleurs. Corrigé (commit b39f547) :
+  - la recette passe par une fonction `lgs` qui appelle `cargo run` ;
+  - le scénario de bout en bout demande à cargo où sont ses fichiers compilés.
+- **S2-3, documentation.** Collés d'un bloc avec la suite, les `read -rs` attendaient la saisie sans rien afficher. Corrigé (commit ae4e58b) : les secrets se saisissent une ligne à la fois, et chaque `read` affiche sa question.
+- **S2-4, application.** Pendant les 10 s qui précèdent l'envoi d'une modification, la pastille affiche « À jour ». C'est un défaut d'affichage, sans perte de données : la modification part au plus tard au déverrouillage suivant.
+  - Correction prévue au début de la semaine 3 : une pastille « Modifications à envoyer » pendant ce délai.
+  - En attendant, l'étape S2-4 demande d'attendre 15 s.
+
+**Critère de sortie de la semaine 2 atteint** : deux postes synchronisés par le serveur « coffre ». La semaine 2 peut être fusionnée.
