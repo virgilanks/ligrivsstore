@@ -14,6 +14,7 @@ Le noyau `ligrivsstore-core` regroupe tout ce qui touche aux secrets. Les applic
 | `local` | Coffre local d'un terminal (`LocalVault`) et boucle de synchronisation |
 | `sync` | Client WebDAV (`WebDavTransport`), état de synchronisation, trait `Transport` |
 | `generator` | Mots de passe et phrases de passe (liste longue de l'EFF) aléatoires (générateur du système, tirage sans biais) |
+| `domain` | Correspondance entre la page ouverte et l'adresse des entrées : liste des suffixes publics, domaines ressemblants écartés (décision 0012) |
 | `error` | Erreurs en français ; une variante par cas, pour que chaque application affiche son propre texte |
 
 La lecture et l'écriture du format reposent sur la bibliothèque `keepass` 0.17.0 (licence MIT), épinglée et encadrée (voir les décisions 0002 et 0006).
@@ -95,18 +96,23 @@ Garanties vérifiées par les tests :
 | Interface de l'application | Liste fermée de commandes, permissions de Tauri, motif d'isolation, politique de contenu stricte (décision 0010) ; le coffre déverrouillé et sa clé restent dans le processus Rust ; l'entrée réservée est refusée aux commandes ordinaires |
 | Verrouillage | Inactivité, session Windows, mise en veille, fermeture ; la clé est alors effacée de la mémoire (décision 0011) |
 | Presse-papiers | Copie par le cœur, hors de l'historique (Windows + V) et du presse-papiers cloud ; effacée après 30 secondes si elle n'a pas été remplacée |
-| Code `unsafe` | Interdit partout, sauf dans le module `systeme_windows` du paquet `ligrivsstore-win` : appels à Windows, un par bloc, chacun justifié ; clippy sous Windows dans l'intégration continue |
+| Code `unsafe` | Interdit partout, sauf dans le module `systeme_windows` du paquet `ligrivsstore-win` : appels à Windows (session, veille, SID du compte, DPAPI, héritage des descripteurs), un par bloc, chacun justifié ; clippy sous Windows dans l'intégration continue |
+| Liaison avec l'extension | Relais réservé aux extensions listées ; canal nommé du compte (liste de contrôle d'accès explicite, première instance) ; appairage confirmé des deux côtés par une empreinte de six groupes de chiffres ; sessions X25519 (permanente et éphémère), HKDF-SHA256, AES-256-GCM, compteur exact ; clé de l'application protégée par DPAPI ; aucun mot de passe transmis en semaine 3 (décision 0012) |
+| Correspondance des domaines | Même hôte, ou autre sous-domaine du même domaine enregistrable (signalé) ; jamais un domaine ressemblant ni un suffixe public partagé ; adresses IP et `localhost` : hôte et port exacts ; jamais d'entrée `https://` sur une page `http://` |
 
 ## Application Windows (jalon 1)
 
 ```text
 apps/windows/src        Svelte 5 : écrans et formulaires ; ne conserve aucun secret
-      │  26 commandes → cadre d'isolation (même liste) → message chiffré → permissions de Tauri
+      │  32 commandes → cadre d'isolation (même liste) → message chiffré → permissions de Tauri
 apps/windows/src-tauri  Tauri 2 : relaie chaque commande vers la session, dans une tâche à part ;
-      │                 fil « pilote » : interroge l'Autopilot chaque seconde et exécute ses demandes
-crates/app              ligrivsstore-app : session, pilote, état observable, réglages, messages, erreurs
-      │        └──────► crates/win (ligrivsstore-win) : session Windows, mise en veille, presse-papiers
-crates/core             ligrivsstore-core : LocalVault (coffre, dérivation, stockage, synchronisation)
+      │                 fil « pilote » : interroge l'Autopilot chaque seconde et exécute ses demandes ;
+      │                 zone de notification ; démarrage avec Windows ; déclaration du relais
+crates/app              ligrivsstore-app : session, pilote, état observable, réglages, messages, erreurs ;
+      │                 liaison avec l'extension (appairage, sessions chiffrées), navigateurs appairés
+      │        ├──────► crates/protocol (ligrivsstore-protocol) : trames, messages, chiffrement
+      │        └──────► crates/win (ligrivsstore-win) : session Windows, veille, presse-papiers, canal, DPAPI
+crates/core             ligrivsstore-core : LocalVault (coffre, dérivation, stockage, synchronisation), domaines
 ```
 
 | Commandes | Rôle |
@@ -122,6 +128,8 @@ crates/core             ligrivsstore-core : LocalVault (coffre, dérivation, sto
 | `list_backups`, `restore_backup` | Les 10 sauvegardes locales ; restauration de leurs entrées |
 | `get_preferences`, `save_preferences` | Délai de verrouillage (1 à 60 minutes) et d'effacement du presse-papiers (10 à 120 secondes) |
 | `generate_password`, `generate_passphrase`, `passphrase_strength` | Générateurs ; robustesse d'une phrase de passe (zxcvbn) |
+| `list_browsers`, `pending_pairings`, `decide_pairing`, `revoke_browser` | Navigateurs appairés ; demandes d'appairage en attente, confirmées ou refusées ; révocation |
+| `get_autostart`, `set_autostart` | Démarrage avec Windows, caché dans la zone de notification |
 
 Le pilote (`Autopilot`) décide du moment des échanges et des verrouillages, sans fil ni horloge propres (décision 0011) :
 
@@ -141,7 +149,31 @@ Fichiers sur le PC (emplacements proposés par défaut) :
 - coffre : `Documents\ligrivsstore\coffre.kdbx`, avec ses sauvegardes et son état de synchronisation ;
 - fichier clé : `%LOCALAPPDATA%\ligrivsstore-cles\coffre.keyx`, hors de OneDrive, donc jamais à côté du coffre sur un serveur, et hors du dossier de l'application, que la désinstallation peut effacer ;
 - réglages : `%APPDATA%\com.ligrivs.ligrivsstore\reglages.json`, qui ne retient que l'emplacement du dernier coffre, celui de son fichier clé et les deux délais ;
-- identifiants du serveur : dans le coffre lui-même (entrée réservée), jamais ailleurs.
+- identifiants du serveur : dans le coffre lui-même (entrée réservée), jamais ailleurs ;
+- navigateurs appairés : `navigateurs.json`, à côté des réglages (clés publiques, empreintes, dates : rien de secret) ;
+- clé d'appairage de l'application : `cle-appairage.bin`, à côté des réglages, chiffrée par DPAPI pour le seul compte Windows.
+
+## Extension et liaison (jalon 1, semaine 3)
+
+```text
+extension Chrome / Edge         service worker : seul à parler à l'application ; lit l'adresse
+(extension/, Manifest V3)       de la page dans l'onglet ; clé d'appairage non exportable (IndexedDB)
+      │  messagerie native : JSON précédé de sa longueur, 1 Mio au plus
+ligrivsstore-pont.exe           relais (crates/bridge) : origine de l'extension vérifiée ; lance
+      │                         l'application si besoin ; transmet sans lire
+      │  canal nommé \\.\pipe\ligrivsstore-<SID> (compte seul, première instance)
+application                     appairage, sessions chiffrées, requêtes : état, entrées de la page, fenêtre
+```
+
+| Étape | Messages (en clair, sauf `msg` et `welcome`) |
+|---|---|
+| Ouverture de la liaison | `bridge` (origine de l'extension, par le relais) |
+| Appairage | `pair` → `pair-pending` (clé de l'application) → `pair-result` (confirmé, refusé, expiré) |
+| Session | `hello` (clés permanente et éphémère) → `welcome` (clé éphémère, premier message chiffré) |
+| Requêtes | `msg` ↔ `msg` : `status`, `entries`, `show`, et leurs réponses |
+| Refus | `error` (version, origine, navigateur non appairé…) |
+
+Les vecteurs d'essai communs (`crates/protocol/tests/vecteurs.json`) garantissent que l'extension (Web Crypto) et l'application (Rust) chiffrent à l'identique. Le détail est dans la décision 0012.
 
 Le cloisonnement de l'interface, la création d'un coffre et les licences sont décrits dans la décision 0010.
 

@@ -175,3 +175,38 @@ Les neuf étapes, S2-1 à S2-9, sont réussies sur le PC Windows d'Hermann.
   - En attendant, l'étape S2-4 demande d'attendre 15 s.
 
 **Critère de sortie de la semaine 2 atteint** : deux postes synchronisés par le serveur « coffre ». La semaine 2 peut être fusionnée.
+
+## Semaine 3 — extension appairée, relais, zone de notification
+
+Livrable vérifiable : une extension appairée qui liste les entrées du site (note de conception n° 3, section 11). Décision 0012.
+
+### 1. Essais automatiques
+
+@@ESSAIS_S3@@
+
+### 2. Essai de bout en bout sous Linux
+
+@@BOUT_EN_BOUT_S3@@
+
+### 3. Recette par Hermann
+
+Avec le coffre de recette de la semaine 2, qui contient l'entrée « amazon12 » (`https://amazon.com`). Prenez l'installateur et l'extension dans l'onglet « Checks » de la demande de fusion n° 6 (artefacts `ligrivsstore-installateur-windows` et `ligrivsstore-extension`).
+
+| N° | Étape | Attendu |
+|---|---|---|
+| S3-1 | Installer l'installateur par-dessus la version de la semaine 2, puis fermer la fenêtre de l'application | L'icône de ligrivsstore reste dans la zone de notification (à côté de l'horloge, au besoin sous la flèche « ^ ») ; son menu propose « Ouvrir », « Verrouiller », « Quitter » |
+| S3-2 | Décompresser l'extension. Dans Chrome : `chrome://extensions`, « Mode développeur », « Charger l'extension non empaquetée », choisir le dossier décompressé | Extension « ligrivsstore » chargée, d'identifiant `pbjfabapbnileccikicpifdnhkocnlbb` |
+| S3-3 | Options de l'extension (clic droit sur son icône, « Options ») : « Appairer avec l'application » | L'application montre la demande, avec la même empreinte (six groupes de cinq chiffres) que l'extension |
+| S3-4 | « Confirmer l'appairage » dans l'application, puis « Oui, identique » dans l'extension | « Ce navigateur est appairé » ; onglet « Navigateurs » de l'application : Chrome, avec l'empreinte et la date |
+| S3-5 | Verrouiller le coffre. Ouvrir `https://www.amazon.com` et cliquer sur l'icône de l'extension | « Le coffre est verrouillé » ; « Ouvrir l'application » montre sa fenêtre |
+| S3-6 | Déverrouiller, puis cliquer de nouveau sur l'icône, sur la même page | « amazon12 » et son identifiant, avec la mention « autre sous-domaine » (`www.amazon.com` contre `amazon.com`) ; aucun mot de passe affiché |
+| S3-7 | Ouvrir `https://www.amazon.fr`, puis cliquer sur l'icône | « Aucune entrée pour www.amazon.fr » : un autre domaine, même proche, ne reçoit rien |
+| S3-8 | Même chose dans Edge (`edge://extensions`, S3-2 à S3-4) | Edge listé à son tour dans l'onglet « Navigateurs » |
+| S3-9 | Révoquer Chrome dans l'onglet « Navigateurs », puis cliquer sur l'icône dans Chrome | « navigateur non appairé… » et « Appairer ce navigateur » ; un nouvel appairage le rétablit |
+| S3-10 | « Quitter » dans le menu de l'icône de la zone de notification, puis cliquer sur l'icône de l'extension | L'application redémarre seule, cachée, coffre verrouillé : « Le coffre est verrouillé » |
+| S3-11 | Réglages : cocher « Démarrer avec Windows », fermer puis rouvrir la session Windows | L'icône est dans la zone de notification, coffre verrouillé. Décocher ensuite si vous ne le souhaitez pas |
+| S3-12 | Modifier une entrée | Pastille « Modifications à envoyer », puis « À jour » une dizaine de secondes après (correction de l'écart de S2-4) |
+
+SmartScreen ou l'antivirus peuvent signaler `ligrivsstore-pont.exe`, qui n'est pas encore signé (D3). Si l'extension répond « relais ligrivsstore introuvable », vérifiez que la clé `HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.ligrivs.ligrivsstore` existe (Éditeur du Registre), puis relancez l'application : elle la rétablit à chaque démarrage.
+
+En cas d'écart, une capture d'écran et le numéro de l'étape suffisent.

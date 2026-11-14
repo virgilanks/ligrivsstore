@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "ligrivsstore",
+  "version": "0.1.0",
+  "description": "Propose, sur les pages de connexion, les identifiants de votre coffre ligrivsstore.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlP7QwOv3j4FX95/Sv3iAAl/xH/tOIR7K7e7y/xGKhQddxoStYRMTk89JuM5WAFsSlt0ibr/hVvwhBpdaqWV1sQuQPCvmI/1UOdjp9g6Aaw279QiJoonYq18GvPpaIND2tHlrQhrnzkUJzQM/4U67OI/iFYCBrXqSey/OCgbgonsJnYf9++NbwbQahfPPO2C9PExkqTc4XJ+ez2jrH0x52t5xZ/X+6mz1/vTZ327I4QMzoOIG9QgJZ6lyYH1tDS3w2wJnJJg0Ta7/LGfAxtQlMl6yoVRW90J3oBWDJTC1CGe9st19DmtCASW1g3O0GhmkO4bGh1mhUwaIAYbkQAR5UQIDAQAB",
+  "minimum_chrome_version": "133",
+  "permissions": ["nativeMessaging", "activeTab"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "ligrivsstore",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+  }
+}

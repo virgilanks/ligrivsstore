@@ -1,4 +1,4 @@
-# Intégration continue : chaque demande de fusion doit passer ces quatre travaux.
+# Intégration continue : chaque demande de fusion doit passer ces travaux.
 # Les actions tierces sont épinglées par empreinte de commit (et non par
 # étiquette), pour qu'une étiquette déplacée ne puisse pas changer le code exécuté.
 name: Intégration continue
@@ -92,7 +92,18 @@ jobs:
         run: rustup toolchain install || rustup show
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: apps/windows/src-tauri
+          workspaces: |
+            apps/windows/src-tauri
+            . -> target
+      - name: Relais ligrivsstore-pont, livré avec l'application
+        # Tauri l'installe à côté de l'application (bundle.externalBin) ; il
+        # doit exister avant toute compilation de la coquille.
+        working-directory: .
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p ligrivsstore-bridge
+          New-Item -ItemType Directory -Force apps/windows/src-tauri/binaries | Out-Null
+          Copy-Item target/release/ligrivsstore-pont.exe apps/windows/src-tauri/binaries/ligrivsstore-pont-x86_64-pc-windows-msvc.exe
       - name: Dépendances de l'interface (versions figées)
         run: npm ci
       - name: Vulnérabilités connues (npm)
@@ -116,6 +127,41 @@ jobs:
         with:
           name: ligrivsstore-installateur-windows
           path: apps/windows/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  extension:
+    name: Extension Chrome et Edge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - name: Outils de construction (versions figées)
+        run: npm ci
+      - name: Vulnérabilités connues (npm)
+        # L'extension n'emporte aucune dépendance : seuls les outils de
+        # construction sont contrôlés.
+        run: npm audit --audit-level=moderate
+      - name: Vérification des types (TypeScript)
+        run: npm run check
+      - name: Protocole : vecteurs communs avec le paquet Rust, rejeu, altération
+        run: npm test
+      - name: Construction
+        run: npm run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ligrivsstore-extension
+          path: extension/dist/
           if-no-files-found: error
           retention-days: 30
 
