@@ -18,7 +18,11 @@
 set -uo pipefail
 
 RACINE_DEPOT="$(cd "$(dirname "$0")/.." && pwd)"
-LGS="${LGS_BIN:-$RACINE_DEPOT/target/debug/lgs}"
+# Dossier des fichiers compilés, tel que cargo le voit (CARGO_TARGET_DIR,
+# configuration de cargo), sinon celui du dépôt.
+CIBLE="$(cd "$RACINE_DEPOT" && cargo metadata --format-version 1 --no-deps 2>/dev/null \
+    | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+LGS="${LGS_BIN:-${CIBLE:-$RACINE_DEPOT/target}/debug/lgs}"
 [ -x "$LGS" ] || { echo "Outil lgs introuvable ($LGS) : lancer d'abord cargo build -p ligrivsstore-cli" >&2; exit 1; }
 : "${LGS_TEST_WEBDAV_URL:?définir LGS_TEST_WEBDAV_URL, voir les instructions en tête du script}"
 : "${LGS_TEST_WEBDAV_USER:?définir LGS_TEST_WEBDAV_USER}"

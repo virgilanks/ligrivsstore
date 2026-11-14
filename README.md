@@ -66,6 +66,8 @@ L'intégration continue produit aussi l'installateur à chaque demande de fusion
 
 Les secrets ne passent jamais par la ligne de commande. Ils sont lus dans des variables d'environnement : `LGS_PASSWORD` (coffre), `LGS_WEBDAV_PASSWORD` (serveur) et `LGS_ENTRY_PASSWORD` (entrée).
 
+Depuis le dossier du dépôt, sans installer l'outil : `lgs() { cargo run -q -p ligrivsstore-cli -- "$@"; }`.
+
 ```bash
 read -rsp "Phrase de passe du coffre : " LGS_PASSWORD && echo && export LGS_PASSWORD
 lgs new coffre.kdbx --calibrate-ms 1000      # crée un coffre (Argon2id calibré)
